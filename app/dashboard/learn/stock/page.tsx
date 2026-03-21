@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid,
+  ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Star, StarOff, TrendingUp, TrendingDown,
   RefreshCw, Sparkles, ShoppingCart, X, BookOpen,
+  ChevronUp, ChevronDown, Activity, Zap, DollarSign,
 } from "lucide-react";
 import { useStockQuote, useStockChart, useStockSearch } from "./hooks/useStock";
 import type { WatchlistItem, Portfolio, ChartPoint } from "./types";
@@ -26,25 +27,42 @@ const STARTING_CASH = 10_000;
 function loadWatchlist(): WatchlistItem[] {
   try { return JSON.parse(localStorage.getItem("watchlist") ?? "[]"); } catch { return []; }
 }
-function saveWatchlist(w: WatchlistItem[]) {
-  localStorage.setItem("watchlist", JSON.stringify(w));
-}
+function saveWatchlist(w: WatchlistItem[]) { localStorage.setItem("watchlist", JSON.stringify(w)); }
 function loadPortfolio(): Portfolio {
   try {
     const p = JSON.parse(localStorage.getItem("portfolio") ?? "null");
     return p ?? { cash: STARTING_CASH, holdings: [] };
   } catch { return { cash: STARTING_CASH, holdings: [] }; }
 }
-function savePortfolio(p: Portfolio) {
-  localStorage.setItem("portfolio", JSON.stringify(p));
+function savePortfolio(p: Portfolio) { localStorage.setItem("portfolio", JSON.stringify(p)); }
+
+/* ── Grid background ── */
+function GridBg() {
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none" }}>
+      <div style={{ position: "absolute", inset: 0, backgroundImage: `linear-gradient(rgba(0,255,136,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,136,0.02) 1px, transparent 1px)`, backgroundSize: "60px 60px" }} />
+      <div style={{ position: "absolute", top: "15%", right: "5%", width: 500, height: 500, borderRadius: "50%", background: "radial-gradient(circle, rgba(0,207,255,0.04) 0%, transparent 70%)" }} />
+      <div style={{ position: "absolute", bottom: "10%", left: "5%", width: 300, height: 300, borderRadius: "50%", background: "radial-gradient(circle, rgba(0,255,136,0.04) 0%, transparent 70%)" }} />
+    </div>
+  );
 }
 
-function AIExplainModal({
-  symbol, points, quote, onClose,
-}: {
+/* ── Custom tooltip ── */
+function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background: "var(--surface2)", border: "1px solid var(--border2)", borderRadius: 8, padding: "8px 14px", fontFamily: "var(--mono)", fontSize: 12, boxShadow: "0 4px 20px rgba(0,0,0,0.4)" }}>
+      <p style={{ color: "var(--text3)", marginBottom: 2, fontSize: 10 }}>{label}</p>
+      <p style={{ color: "var(--em)", fontWeight: 700 }}>${fmt(payload[0].value)}</p>
+    </div>
+  );
+}
+
+/* ── AI Explain Modal ── */
+function AIExplainModal({ symbol, points, quote, onClose }: {
   symbol: string;
   points: { time: string; close: number }[];
-  quote:  { price: number; change: number; changePct: string } | null;
+  quote: { price: number; change: number; changePct: string } | null;
   onClose: () => void;
 }) {
   const [explanation, setExplanation] = useState("");
@@ -53,95 +71,70 @@ function AIExplainModal({
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const first  = points[0]?.close ?? 0;
-      const last   = points[points.length - 1]?.close ?? 0;
-      const trend  = last > first ? "upward" : last < first ? "downward" : "flat";
-      const swing  = Math.abs(((last - first) / first) * 100).toFixed(2);
-      const maxP   = Math.max(...points.map(p => p.close));
-      const minP   = Math.min(...points.map(p => p.close));
+      const first = points[0]?.close ?? 0;
+      const last  = points[points.length - 1]?.close ?? 0;
+      const trend = last > first ? "upward" : last < first ? "downward" : "flat";
+      const swing = Math.abs(((last - first) / (first || 1)) * 100).toFixed(2);
+      const maxP  = Math.max(...points.map(p => p.close));
+      const minP  = Math.min(...points.map(p => p.close));
 
-      const prompt = `You are FinMentor AI. Explain the following stock chart data to a beginner investor in simple, friendly language. Keep it under 150 words. Use plain text, no markdown.
-
-Stock: ${symbol}
-Current price: $${quote?.price ?? last}
-Today's change: ${quote?.changePct ?? "N/A"}
-Chart trend: ${trend} over the shown period
-Price swing: ${swing}%
-Highest price shown: $${fmt(maxP)}
-Lowest price shown: $${fmt(minP)}
-Data points: ${points.length}
-
-Explain what this chart tells us, whether this looks positive or concerning, and one simple takeaway for a beginner.`;
+      const prompt = `You are FinMentor AI. Explain the following stock chart data to a beginner investor in simple, friendly language. Keep it under 150 words. Use plain text, no markdown.\n\nStock: ${symbol}\nCurrent price: $${quote?.price ?? last}\nToday's change: ${quote?.changePct ?? "N/A"}\nChart trend: ${trend} over the shown period\nPrice swing: ${swing}%\nHighest price shown: $${fmt(maxP)}\nLowest price shown: $${fmt(minP)}\n\nExplain what this chart tells us, whether this looks positive or concerning, and one simple takeaway for a beginner.`;
 
       try {
-        const res  = await fetch("/api/finbot", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: [{ role: "user", content: prompt }],
-            budgetContext: "User is viewing a stock chart.",
-          }),
-        });
+        const res  = await fetch("/api/finbot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: [{ role: "user", content: prompt }], budgetContext: "User is viewing a stock chart." }) });
         const data = await res.json();
         setExplanation(data.content?.[0]?.text ?? "Could not generate explanation.");
       } catch {
         setExplanation("Could not reach AI mentor. Please check your API setup.");
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
     })();
   }, [symbol, points, quote]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backdropFilter: "blur(8px)" }}
       onClick={onClose}
     >
-      <motion.div
-        initial={{ scale: 0.95, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.95, y: 20 }}
+      <motion.div initial={{ scale: 0.92, y: 24 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.92, y: 24 }}
         onClick={e => e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full"
+        style={{ background: "var(--surface)", border: "1px solid rgba(0,255,136,0.3)", borderRadius: 20, padding: 28, maxWidth: 460, width: "100%", boxShadow: "0 0 60px rgba(0,255,136,0.15)", position: "relative", overflow: "hidden" }}
       >
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-              <Sparkles size={16} className="text-indigo-600" />
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "linear-gradient(90deg, transparent, var(--em), transparent)" }} />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(0,255,136,0.1)", border: "1px solid rgba(0,255,136,0.3)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 16px rgba(0,255,136,0.3)" }}>
+              <Sparkles size={17} color="var(--em)" />
             </div>
-            <h3 className="font-semibold text-gray-800">AI Chart Explanation</h3>
+            <div>
+              <p style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--em)", letterSpacing: "2px" }}>// AI CHART ANALYSIS</p>
+              <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{symbol}</p>
+            </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X size={18} />
-          </button>
+          <button onClick={onClose} style={{ background: "none", border: "1px solid var(--border2)", borderRadius: 6, width: 28, height: 28, cursor: "pointer", color: "var(--text3)", display: "flex", alignItems: "center", justifyContent: "center" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--red)"; e.currentTarget.style.color = "var(--red)"; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border2)"; e.currentTarget.style.color = "var(--text3)"; }}
+          ><X size={13} /></button>
         </div>
-        <p className="text-xs text-gray-400 mb-3">{symbol} · Powered by Claude</p>
+
         {loading ? (
-          <div className="space-y-2">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-4 bg-gray-100 rounded animate-pulse" style={{ width: `${85 - i * 10}%` }} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[80, 65, 90, 55].map((w, i) => (
+              <div key={i} style={{ height: 12, background: "var(--surface2)", borderRadius: 4, width: `${w}%`, animation: "pulse-em 1.5s ease-in-out infinite", animationDelay: `${i * 0.15}s` }} />
             ))}
           </div>
         ) : (
-          <p className="text-gray-700 text-sm leading-relaxed">{explanation}</p>
+          <p style={{ fontSize: 14, color: "var(--text2)", lineHeight: 1.8 }}>{explanation}</p>
         )}
-        <p className="text-[10px] text-gray-400 mt-4">Not financial advice · For educational purposes only</p>
+        <p style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", marginTop: 16, letterSpacing: "0.5px" }}>POWERED BY CLAUDE · NOT FINANCIAL ADVICE</p>
       </motion.div>
     </motion.div>
   );
 }
 
-function TradeModal({
-  symbol, price, portfolio, onClose, onTrade,
-}: {
-  symbol:    string;
-  price:     number;
-  portfolio: Portfolio;
-  onClose:   () => void;
-  onTrade:   (type: "buy" | "sell", shares: number) => void;
+/* ── Trade Modal ── */
+function TradeModal({ symbol, price, portfolio, onClose, onTrade }: {
+  symbol: string; price: number; portfolio: Portfolio;
+  onClose: () => void; onTrade: (type: "buy" | "sell", shares: number) => void;
 }) {
   const [type, setType]     = useState<"buy" | "sell">("buy");
   const [shares, setShares] = useState("1");
@@ -152,87 +145,72 @@ function TradeModal({
   const canSell = !!holding && n > 0 && n <= holding.shares;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backdropFilter: "blur(8px)" }}
       onClick={onClose}
     >
-      <motion.div
-        initial={{ scale: 0.95, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.95, y: 20 }}
+      <motion.div initial={{ scale: 0.92, y: 24 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.92, y: 24 }}
         onClick={e => e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full"
+        style={{ background: "var(--surface)", border: `1px solid ${type === "buy" ? "rgba(0,255,136,0.3)" : "rgba(255,68,68,0.3)"}`, borderRadius: 20, padding: 24, maxWidth: 380, width: "100%", boxShadow: type === "buy" ? "0 0 40px rgba(0,255,136,0.1)" : "0 0 40px rgba(255,68,68,0.1)", position: "relative", overflow: "hidden" }}
       >
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="font-semibold text-gray-800">Simulated Trade · {symbol}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${type === "buy" ? "var(--em)" : "var(--red)"}, transparent)` }} />
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <div>
+            <p style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text3)", letterSpacing: "2px", marginBottom: 2 }}>// SIMULATED TRADE</p>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>{symbol}</h3>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "1px solid var(--border2)", borderRadius: 6, width: 28, height: 28, cursor: "pointer", color: "var(--text3)", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
         </div>
 
-        <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
+        {/* Buy/Sell toggle */}
+        <div style={{ display: "flex", background: "var(--bg3)", borderRadius: 10, padding: 3, marginBottom: 18, border: "1px solid var(--border)" }}>
           {(["buy", "sell"] as const).map(t => (
-            <button
-              key={t}
-              onClick={() => setType(t)}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                type === t
-                  ? t === "buy" ? "bg-green-500 text-white" : "bg-red-500 text-white"
-                  : "text-gray-500"
-              }`}
-            >
-              {t === "buy" ? "Buy" : "Sell"}
+            <button key={t} onClick={() => setType(t)} style={{ flex: 1, padding: "9px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: "var(--mono)", letterSpacing: "0.5px", background: type === t ? (t === "buy" ? "var(--em)" : "var(--red)") : "transparent", color: type === t ? "#000" : "var(--text3)", transition: "all 0.2s", boxShadow: type === t ? (t === "buy" ? "0 0 12px rgba(0,255,136,0.4)" : "0 0 12px rgba(255,68,68,0.4)") : "none" }}>
+              {t.toUpperCase()}
             </button>
           ))}
         </div>
 
-        <div className="space-y-3 mb-5">
-          <div className="flex justify-between text-sm text-gray-500">
-            <span>Price per share</span>
-            <span className="font-medium text-gray-800">${fmt(price)}</span>
-          </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
+          {[
+            { label: "PRICE PER SHARE", value: `$${fmt(price)}` },
+            { label: "AVAILABLE CASH",  value: `$${fmt(portfolio.cash)}` },
+            ...(holding ? [{ label: "SHARES OWNED", value: `${holding.shares}` }] : []),
+          ].map(s => (
+            <div key={s.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text3)", letterSpacing: "0.5px" }}>{s.label}</span>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{s.value}</span>
+            </div>
+          ))}
+
           <div>
-            <label className="text-sm text-gray-500 block mb-1">Shares</label>
-            <input
-              type="number"
-              min="0"
-              value={shares}
-              onChange={e => setShares(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            <label style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text3)", display: "block", marginBottom: 6, letterSpacing: "0.5px" }}>SHARES</label>
+            <input type="number" min="0" value={shares} onChange={e => setShares(e.target.value)}
+              style={{ width: "100%", padding: "10px 14px", background: "var(--surface2)", border: "1px solid var(--border2)", borderRadius: 8, fontSize: 14, color: "var(--text)", fontFamily: "var(--mono)", outline: "none", fontWeight: 700 }}
             />
           </div>
-          <div className="flex justify-between text-sm font-medium border-t pt-3">
-            <span>Total</span>
-            <span>${fmt(total)}</span>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "var(--bg3)", borderRadius: 8, border: "1px solid var(--border)" }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text3)", letterSpacing: "0.5px" }}>TOTAL</span>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 16, fontWeight: 700, color: type === "buy" ? "var(--em)" : "var(--red)", textShadow: type === "buy" ? "0 0 12px rgba(0,255,136,0.4)" : "0 0 12px rgba(255,68,68,0.4)" }}>${fmt(total)}</span>
           </div>
-          <div className="flex justify-between text-xs text-gray-400">
-            <span>Available cash</span>
-            <span>${fmt(portfolio.cash)}</span>
-          </div>
-          {holding && (
-            <div className="flex justify-between text-xs text-gray-400">
-              <span>Shares owned</span>
-              <span>{holding.shares}</span>
-            </div>
-          )}
         </div>
 
         <button
           onClick={() => { if ((type === "buy" && canBuy) || (type === "sell" && canSell)) { onTrade(type, n); onClose(); } }}
           disabled={type === "buy" ? !canBuy : !canSell}
-          className={`w-full py-3 rounded-xl font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-            type === "buy" ? "bg-green-500 hover:bg-green-600" : "bg-red-500 hover:bg-red-600"
-          }`}
+          style={{ width: "100%", padding: "12px", background: type === "buy" ? "var(--em)" : "var(--red)", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: (type === "buy" ? canBuy : canSell) ? "pointer" : "not-allowed", fontFamily: "'Space Grotesk', sans-serif", opacity: (type === "buy" ? canBuy : canSell) ? 1 : 0.4, transition: "all 0.2s", boxShadow: (type === "buy" ? canBuy : canSell) ? (type === "buy" ? "0 0 20px rgba(0,255,136,0.4)" : "0 0 20px rgba(255,68,68,0.4)") : "none" }}
         >
           {type === "buy" ? `Buy ${n} share${n !== 1 ? "s" : ""}` : `Sell ${n} share${n !== 1 ? "s" : ""}`}
         </button>
-        <p className="text-center text-[10px] text-gray-400 mt-2">Simulated only · No real money involved</p>
+        <p style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", textAlign: "center", marginTop: 10, letterSpacing: "0.5px" }}>SIMULATED ONLY · NO REAL MONEY</p>
       </motion.div>
     </motion.div>
   );
 }
 
+/* ── Main Page ── */
 export default function StockPage() {
   const [symbol, setSymbol]           = useState("AAPL");
   const [selectedDays, setSelectedDays] = useState<"7" | "90">("90");
@@ -242,6 +220,7 @@ export default function StockPage() {
   const [showTrade, setShowTrade]     = useState(false);
   const [toast, setToast]             = useState<string | null>(null);
   const [searchQ, setSearchQ]         = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const searchRef                     = useRef<HTMLDivElement>(null);
 
   const { quote,  loading: qLoad, refetch: refetchQ } = useStockQuote(symbol);
@@ -268,8 +247,7 @@ export default function StockPage() {
     const next = isWatched
       ? watchlist.filter(w => w.symbol !== symbol)
       : [...watchlist, { symbol, addedAt: new Date().toISOString(), lastPrice: quote?.price }];
-    setWatchlist(next);
-    saveWatchlist(next);
+    setWatchlist(next); saveWatchlist(next);
     showToast(isWatched ? `Removed ${symbol} from watchlist` : `Added ${symbol} to watchlist`);
   };
 
@@ -281,311 +259,361 @@ export default function StockPage() {
       if (type === "buy") {
         const existing = prev.holdings.find(h => h.symbol === symbol);
         const holdings = existing
-          ? prev.holdings.map(h => h.symbol === symbol
-              ? { ...h, shares: h.shares + shares, avgPrice: (h.avgPrice * h.shares + cost) / (h.shares + shares) }
-              : h)
+          ? prev.holdings.map(h => h.symbol === symbol ? { ...h, shares: h.shares + shares, avgPrice: (h.avgPrice * h.shares + cost) / (h.shares + shares) } : h)
           : [...prev.holdings, { symbol, shares, avgPrice: quote.price, boughtAt: new Date().toISOString() }];
         next = { cash: prev.cash - cost, holdings };
       } else {
-        const holdings = prev.holdings
-          .map(h => h.symbol === symbol ? { ...h, shares: h.shares - shares } : h)
-          .filter(h => h.shares > 0);
+        const holdings = prev.holdings.map(h => h.symbol === symbol ? { ...h, shares: h.shares - shares } : h).filter(h => h.shares > 0);
         next = { cash: prev.cash + cost, holdings };
       }
-      savePortfolio(next);
-      return next;
+      savePortfolio(next); return next;
     });
     showToast(`${type === "buy" ? "Bought" : "Sold"} ${shares} share${shares !== 1 ? "s" : ""} of ${symbol}`);
   };
 
-  const isUp           = (quote?.change ?? 0) >= 0;
-  const holding        = portfolio.holdings.find(h => h.symbol === symbol);
-  const chartData      = points
-    .slice(selectedDays === "7" ? -7 : -90)
-    .map((p: ChartPoint) => ({ ...p, time: fmtTime(p.time) }));
-  const portfolioValue = portfolio.holdings.reduce((sum, h) => {
-    const price = h.symbol === symbol ? (quote?.price ?? h.avgPrice) : h.avgPrice;
-    return sum + h.shares * price;
-  }, 0);
+  const isUp         = (quote?.change ?? 0) >= 0;
+  const chartData    = points.slice(selectedDays === "7" ? -7 : -90).map((p: ChartPoint) => ({ ...p, time: fmtTime(p.time) }));
+  const portValue    = portfolio.holdings.reduce((sum, h) => sum + h.shares * (h.symbol === symbol ? (quote?.price ?? h.avgPrice) : h.avgPrice), 0);
+  const totalValue   = portfolio.cash + portValue;
+  const totalGain    = totalValue - STARTING_CASH;
+
+  /* Sparkline for mini chart in watchlist */
+  const avgPrice = chartData.length > 0 ? chartData.reduce((s, p) => s + p.close, 0) / chartData.length : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+    <div style={{ background: "var(--bg)", minHeight: "100vh", position: "relative" }}>
+      <GridBg />
+      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "40px 24px", position: "relative", zIndex: 1 }}>
 
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* ── Header ── */}
+        <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }}
+          style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28, flexWrap: "wrap", gap: 16 }}
+        >
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">📈 Stock Tracker</h1>
-            <p className="text-gray-500 text-sm mt-1">Live prices · AI insights · Simulated trading</p>
-          </div>
-          <div className="relative w-full md:w-80" ref={searchRef}>
-            <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 gap-2 shadow-sm focus-within:ring-2 focus-within:ring-indigo-300">
-              <Search size={16} className="text-gray-400 shrink-0" />
-              <input
-                value={searchQ}
-                onChange={e => setSearchQ(e.target.value)}
-                placeholder="Search stocks... (e.g. Apple, TSLA)"
-                className="flex-1 py-2.5 text-sm bg-transparent outline-none text-gray-800 placeholder-gray-400"
-              />
-              {sLoad && <RefreshCw size={14} className="text-gray-400 animate-spin" />}
+            <p style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--em)", letterSpacing: "2px", marginBottom: 6 }}>// STOCK TRACKER</p>
+            <h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1 }}>
+              Live <span style={{ color: "var(--em)" }}>Markets</span>
+            </h1>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--em)", display: "inline-block", boxShadow: "0 0 8px var(--em)", animation: "pulse-em 2s infinite" }} />
+              <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--em)", fontWeight: 700, letterSpacing: "1px" }}>LIVE</span>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text3)" }}>· Real-time prices · AI insights · Simulated trading</span>
             </div>
-            {results.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-lg z-10 overflow-hidden">
-                {results.map((r) => (
-                  <button
-                    key={r.symbol}
-                    onClick={() => { setSymbol(r.symbol); setSearchQ(""); clearResults(); }}
-                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-indigo-50 transition-colors text-left"
+          </div>
+
+          {/* Search */}
+          <div style={{ position: "relative", width: 300 }} ref={searchRef}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--surface)", border: `1px solid ${searchFocused ? "var(--em)" : "var(--border2)"}`, borderRadius: 10, padding: "10px 14px", boxShadow: searchFocused ? "0 0 0 3px var(--em3)" : "none", transition: "all 0.2s" }}>
+              <Search size={14} color="var(--text3)" />
+              <input value={searchQ} onChange={e => setSearchQ(e.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
+                placeholder="Search stocks... (e.g. Tesla, AAPL)"
+                style={{ background: "transparent", border: "none", outline: "none", fontSize: 13, color: "var(--text)", fontFamily: "'Space Grotesk', sans-serif", flex: 1 }}
+              />
+              {sLoad && <RefreshCw size={13} color="var(--text3)" style={{ animation: "spin 1s linear infinite" }} />}
+            </div>
+            {results.length > 0 && searchFocused && (
+              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.4)", zIndex: 50, overflow: "hidden" }}>
+                {results.map(r => (
+                  <button key={r.symbol} onClick={() => { setSymbol(r.symbol); setSearchQ(""); clearResults(); }}
+                    style={{ width: "100%", padding: "10px 14px", background: "none", border: "none", borderBottom: "1px solid var(--border)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "background 0.15s", fontFamily: "'Space Grotesk', sans-serif" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--surface2)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                   >
-                    <span className="font-semibold text-sm text-gray-800">{r.symbol}</span>
-                    <span className="text-xs text-gray-500 truncate max-w-[180px]">{r.name}</span>
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700, color: "var(--em)" }}>{r.symbol}</span>
+                    <span style={{ fontSize: 11, color: "var(--text3)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
                   </button>
                 ))}
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
 
-        {/* Quote card */}
-        <motion.div
-          key={symbol}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100"
+        {/* ── Quote card ── */}
+        <motion.div key={symbol} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          style={{ background: "var(--surface)", border: `1px solid ${isUp ? "rgba(0,255,136,0.2)" : "rgba(255,68,68,0.2)"}`, borderRadius: "var(--radius-lg)", padding: "22px 24px", marginBottom: 16, position: "relative", overflow: "hidden", boxShadow: isUp ? "0 0 40px rgba(0,255,136,0.05)" : "0 0 40px rgba(255,68,68,0.05)" }}
         >
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${isUp ? "var(--em)" : "var(--red)"}, transparent)` }} />
+
           {qLoad ? (
-            <div className="space-y-3">
-              <div className="h-8 w-40 bg-gray-100 rounded animate-pulse" />
-              <div className="h-12 w-56 bg-gray-100 rounded animate-pulse" />
+            <div style={{ display: "flex", gap: 20 }}>
+              {[140, 200, 100].map((w, i) => <div key={i} style={{ height: 20, width: w, background: "var(--surface2)", borderRadius: 4, animation: "pulse-em 1.5s ease-in-out infinite", animationDelay: `${i * 0.1}s` }} />)}
             </div>
           ) : quote ? (
-            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start", justifyContent: "space-between" }}>
               <div>
-                <div className="flex items-center gap-3 mb-1">
-                  <h2 className="text-2xl font-bold text-gray-900">{quote.symbol}</h2>
-                  <button onClick={toggleWatch} className="text-gray-400 hover:text-yellow-500 transition-colors">
-                    {isWatched ? <Star size={20} className="fill-yellow-400 text-yellow-400" /> : <StarOff size={20} />}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+                  <h2 style={{ fontFamily: "var(--mono)", fontSize: 28, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.02em" }}>{quote.symbol}</h2>
+                  <button onClick={toggleWatch} style={{ background: "none", border: "none", cursor: "pointer", transition: "transform 0.2s" }}
+                    onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.2)")}
+                    onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
+                  >
+                    {isWatched ? <Star size={20} fill="#FFD600" color="#FFD600" style={{ filter: "drop-shadow(0 0 8px #FFD600)" }} /> : <StarOff size={20} color="var(--text3)" />}
                   </button>
+                  <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text3)", background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 8px" }}>As of {quote.latestDay}</span>
                 </div>
-                <div className="flex items-end gap-3">
-                  <span className="text-4xl font-bold text-gray-900">${fmt(quote.price)}</span>
-                  <div className={`flex items-center gap-1 pb-1 ${isUp ? "text-green-600" : "text-red-500"}`}>
-                    {isUp ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
-                    <span className="font-semibold">{isUp ? "+" : ""}{fmt(quote.change)} ({quote.changePct})</span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+                  <span style={{ fontFamily: "var(--mono)", fontSize: 44, fontWeight: 700, color: "var(--text)", lineHeight: 1, textShadow: isUp ? "0 0 30px rgba(0,255,136,0.2)" : "0 0 30px rgba(255,68,68,0.2)" }}>${fmt(quote.price)}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    {isUp ? <ChevronUp size={18} color="var(--em)" /> : <ChevronDown size={18} color="var(--red)" />}
+                    <span style={{ fontFamily: "var(--mono)", fontSize: 15, fontWeight: 700, color: isUp ? "var(--em)" : "var(--red)", textShadow: isUp ? "0 0 12px rgba(0,255,136,0.5)" : "0 0 12px rgba(255,68,68,0.5)" }}>
+                      {isUp ? "+" : ""}{fmt(quote.change)} ({quote.changePct})
+                    </span>
                   </div>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">As of {quote.latestDay}</p>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 {[
-                  { label: "High",       value: `$${fmt(quote.high)}` },
-                  { label: "Low",        value: `$${fmt(quote.low)}` },
-                  { label: "Prev Close", value: `$${fmt(quote.prevClose)}` },
-                  { label: "Volume",     value: fmtK(quote.volume) },
+                  { label: "HIGH",       value: `$${fmt(quote.high)}`,     color: "var(--em)" },
+                  { label: "LOW",        value: `$${fmt(quote.low)}`,      color: "var(--red)" },
+                  { label: "PREV CLOSE", value: `$${fmt(quote.prevClose)}`, color: "var(--text2)" },
+                  { label: "VOLUME",     value: fmtK(quote.volume),        color: "var(--text2)" },
                 ].map(s => (
-                  <div key={s.label} className="bg-gray-50 rounded-xl px-4 py-3 text-center">
-                    <p className="text-xs text-gray-400">{s.label}</p>
-                    <p className="font-semibold text-gray-800 text-sm mt-0.5">{s.value}</p>
+                  <div key={s.label} style={{ background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 16px", minWidth: 90, textAlign: "center" }}>
+                    <p style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", letterSpacing: "1px", marginBottom: 4 }}>{s.label}</p>
+                    <p style={{ fontFamily: "var(--mono)", fontSize: 14, fontWeight: 700, color: s.color }}>{s.value}</p>
                   </div>
                 ))}
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <button onClick={() => setShowTrade(true)} disabled={!quote}
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 18px", background: "var(--em)", color: "#000", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "var(--mono)", letterSpacing: "0.5px", boxShadow: "0 0 16px rgba(0,255,136,0.4)", transition: "all 0.2s" }}
+                    onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 0 24px rgba(0,255,136,0.6)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 0 16px rgba(0,255,136,0.4)"; e.currentTarget.style.transform = "translateY(0)"; }}
+                  >
+                    <ShoppingCart size={13} /> TRADE
+                  </button>
+                  <button onClick={refetchQ}
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", background: "transparent", color: "var(--text3)", border: "1px solid var(--border2)", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "var(--mono)", transition: "all 0.2s" }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--em)"; e.currentTarget.style.color = "var(--em)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border2)"; e.currentTarget.style.color = "var(--text3)"; }}
+                  >
+                    <RefreshCw size={11} className={qLoad ? "animate-spin" : ""} /> REFRESH
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
-            <p className="text-red-500 text-sm">Could not load quote. Check your API key or try again.</p>
+            <p style={{ fontFamily: "var(--mono)", fontSize: 13, color: "var(--red)" }}>Could not load quote. Check your API key or try again.</p>
           )}
         </motion.div>
 
-        {/* Chart */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-            <h3 className="font-semibold text-gray-800">Price Chart</h3>
-            <div className="flex items-center gap-2">
-              <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
-                {(["7", "90"] as const).map(days => (
-                  <button
-                    key={days}
-                    onClick={() => setSelectedDays(days)}
-                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                      selectedDays === days ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500"
-                    }`}
-                  >
-                    {days === "7" ? "7D" : "90D"}
-                  </button>
+        {/* ── Chart ── */}
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+          style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px 24px", marginBottom: 16, position: "relative", overflow: "hidden" }}
+        >
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${isUp ? "var(--em)" : "var(--red)"}, transparent)` }} />
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Activity size={14} color="var(--text3)" />
+              <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text)", fontWeight: 600 }}>PRICE CHART</span>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text3)" }}>· {symbol}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {/* Range toggle */}
+              <div style={{ display: "flex", background: "var(--bg3)", borderRadius: 8, padding: 3, border: "1px solid var(--border)", gap: 3 }}>
+                {(["7", "90"] as const).map(d => (
+                  <button key={d} onClick={() => setSelectedDays(d)}
+                    style={{ padding: "5px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "var(--mono)", background: selectedDays === d ? (isUp ? "var(--em)" : "var(--red)") : "transparent", color: selectedDays === d ? "#000" : "var(--text3)", transition: "all 0.2s", boxShadow: selectedDays === d ? (isUp ? "0 0 8px rgba(0,255,136,0.4)" : "0 0 8px rgba(255,68,68,0.4)") : "none" }}
+                  >{d === "7" ? "7D" : "90D"}</button>
                 ))}
               </div>
-              <button
-                onClick={() => setShowExplain(true)}
-                disabled={points.length === 0}
-                className="flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40"
+              {/* AI Explain */}
+              <button onClick={() => setShowExplain(true)} disabled={points.length === 0}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", background: "rgba(0,255,136,0.08)", border: "1px solid rgba(0,255,136,0.2)", borderRadius: 8, cursor: "pointer", color: "var(--em)", fontSize: 11, fontWeight: 600, fontFamily: "var(--mono)", letterSpacing: "0.5px", transition: "all 0.2s", boxShadow: "0 0 12px rgba(0,255,136,0.1)" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,255,136,0.15)"; e.currentTarget.style.boxShadow = "0 0 20px rgba(0,255,136,0.25)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "rgba(0,255,136,0.08)"; e.currentTarget.style.boxShadow = "0 0 12px rgba(0,255,136,0.1)"; }}
               >
-                <Sparkles size={13} />
-                AI Explain
-              </button>
-              <button onClick={refetchQ} className="text-gray-400 hover:text-gray-600 transition-colors">
-                <RefreshCw size={16} className={qLoad ? "animate-spin" : ""} />
+                <Sparkles size={12} /> AI EXPLAIN
               </button>
             </div>
           </div>
 
           {cLoad ? (
-            <div className="h-64 bg-gray-50 rounded-xl animate-pulse" />
+            <div style={{ height: 280, background: "var(--bg3)", borderRadius: 10, animation: "pulse-em 1.5s ease-in-out infinite" }} />
           ) : chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={chartData}>
+              <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={isUp ? "#6366F1" : "#EF4444"} stopOpacity={0.15} />
-                    <stop offset="95%" stopColor={isUp ? "#6366F1" : "#EF4444"} stopOpacity={0} />
+                    <stop offset="0%"   stopColor={isUp ? "#00FF88" : "#FF4444"} stopOpacity={0.2} />
+                    <stop offset="100%" stopColor={isUp ? "#00FF88" : "#FF4444"} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="time" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={v => `$${v}`} width={60} />
-                <Tooltip
-                  formatter={(v) => [`$${fmt(v as number)}`, "Price"]}
-                  contentStyle={{ borderRadius: "12px", border: "1px solid #e5e7eb", fontSize: "12px" }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="close"
-                  stroke={isUp ? "#6366F1" : "#EF4444"}
-                  strokeWidth={2}
-                  fill="url(#priceGrad)"
-                  dot={false}
-                  activeDot={{ r: 4 }}
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
+                <XAxis dataKey="time" tick={{ fontSize: 10, fontFamily: "var(--mono)", fill: "var(--text3)" }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10, fontFamily: "var(--mono)", fill: "var(--text3)" }} tickLine={false} axisLine={false} tickFormatter={v => `$${v}`} width={65} />
+                <Tooltip content={<ChartTooltip />} />
+                <ReferenceLine y={avgPrice} stroke="rgba(255,255,255,0.08)" strokeDasharray="4 4" />
+                <Area type="monotone" dataKey="close" stroke={isUp ? "#00FF88" : "#FF4444"} strokeWidth={2}
+                  fill="url(#priceGrad)" dot={false} activeDot={{ r: 5, fill: isUp ? "#00FF88" : "#FF4444", stroke: "var(--bg)", strokeWidth: 2, filter: `drop-shadow(0 0 6px ${isUp ? "#00FF88" : "#FF4444"})` }}
                 />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-64 flex items-center justify-center text-gray-400 text-sm">
-              No chart data available
+            <div style={{ height: 280, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <p style={{ fontFamily: "var(--mono)", fontSize: 12, color: "var(--text3)" }}>NO CHART DATA AVAILABLE</p>
             </div>
           )}
-        </div>
+        </motion.div>
 
-        {/* Portfolio + Watchlist */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-800">💼 Simulated Portfolio</h3>
-              <button
-                onClick={() => setShowTrade(true)}
-                disabled={!quote}
-                className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40"
-              >
-                <ShoppingCart size={13} />
-                Trade {symbol}
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="bg-green-50 rounded-xl p-3">
-                <p className="text-xs text-gray-500">Cash</p>
-                <p className="font-bold text-green-700">${fmt(portfolio.cash)}</p>
+        {/* ── Bottom grid ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }} className="fm-stock-grid">
+
+          {/* Portfolio */}
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "18px 20px", overflow: "hidden", position: "relative" }}
+          >
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "linear-gradient(90deg, transparent, var(--em), transparent)" }} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <DollarSign size={13} color="var(--em)" />
+                <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--em)", letterSpacing: "1px" }}>PORTFOLIO</span>
               </div>
-              <div className="bg-indigo-50 rounded-xl p-3">
-                <p className="text-xs text-gray-500">Holdings value</p>
-                <p className="font-bold text-indigo-700">${fmt(portfolioValue)}</p>
-              </div>
+              <button onClick={() => setShowTrade(true)} disabled={!quote}
+                style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", background: "var(--em3)", border: "1px solid var(--em2)", borderRadius: 6, cursor: "pointer", color: "var(--em)", fontSize: 10, fontWeight: 700, fontFamily: "var(--mono)", letterSpacing: "0.5px", transition: "all 0.15s" }}
+              ><ShoppingCart size={10} /> TRADE {symbol}</button>
             </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+              {[
+                { label: "CASH",    value: `$${fmt(portfolio.cash)}`,  color: "var(--em)" },
+                { label: "HOLDINGS", value: `$${fmt(portValue)}`,       color: "#00CFFF" },
+                { label: "TOTAL",   value: `$${fmt(totalValue)}`,       color: "var(--text)" },
+                { label: "P&L",     value: `${totalGain >= 0 ? "+" : ""}$${fmt(totalGain)}`, color: totalGain >= 0 ? "var(--em)" : "var(--red)" },
+              ].map(s => (
+                <div key={s.label} style={{ background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px" }}>
+                  <p style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", letterSpacing: "0.5px", marginBottom: 4 }}>{s.label}</p>
+                  <p style={{ fontFamily: "var(--mono)", fontSize: 14, fontWeight: 700, color: s.color, textShadow: s.color !== "var(--text)" ? `0 0 10px ${s.color}50` : "none" }}>{s.value}</p>
+                </div>
+              ))}
+            </div>
+
             {portfolio.holdings.length === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-4">No holdings yet. Try buying some shares!</p>
+              <p style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text3)", textAlign: "center", padding: "12px 0" }}>NO HOLDINGS · START TRADING</p>
             ) : (
-              <div className="space-y-2">
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 180, overflowY: "auto" }}>
                 {portfolio.holdings.map(h => {
-                  const currentPrice = h.symbol === symbol ? (quote?.price ?? h.avgPrice) : h.avgPrice;
-                  const gain = (currentPrice - h.avgPrice) * h.shares;
+                  const cur  = h.symbol === symbol ? (quote?.price ?? h.avgPrice) : h.avgPrice;
+                  const gain = (cur - h.avgPrice) * h.shares;
                   return (
-                    <div key={h.symbol} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                    <div key={h.symbol} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 7 }}>
                       <div>
-                        <button onClick={() => setSymbol(h.symbol)} className="font-semibold text-sm text-indigo-600 hover:underline">
-                          {h.symbol}
-                        </button>
-                        <p className="text-xs text-gray-400">{h.shares} shares · avg ${fmt(h.avgPrice)}</p>
+                        <button onClick={() => setSymbol(h.symbol)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--mono)", fontSize: 12, fontWeight: 700, color: "var(--em)", padding: 0 }}>{h.symbol}</button>
+                        <p style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", marginTop: 1 }}>{h.shares} @ ${fmt(h.avgPrice)}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-gray-800">${fmt(currentPrice * h.shares)}</p>
-                        <p className={`text-xs ${gain >= 0 ? "text-green-600" : "text-red-500"}`}>
-                          {gain >= 0 ? "+" : ""}${fmt(gain)}
-                        </p>
+                      <div style={{ textAlign: "right" }}>
+                        <p style={{ fontFamily: "var(--mono)", fontSize: 12, fontWeight: 700, color: "var(--text)" }}>${fmt(cur * h.shares)}</p>
+                        <p style={{ fontFamily: "var(--mono)", fontSize: 10, color: gain >= 0 ? "var(--em)" : "var(--red)" }}>{gain >= 0 ? "+" : ""}${fmt(gain)}</p>
                       </div>
                     </div>
                   );
                 })}
               </div>
             )}
-          </div>
+          </motion.div>
 
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-800">⭐ Watchlist</h3>
-              <span className="text-xs text-gray-400">{watchlist.length} stocks</span>
+          {/* Watchlist */}
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "18px 20px", overflow: "hidden", position: "relative" }}
+          >
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "linear-gradient(90deg, transparent, #FFD600, transparent)" }} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <Star size={13} color="#FFD600" />
+                <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "#FFD600", letterSpacing: "1px" }}>WATCHLIST</span>
+              </div>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--text3)" }}>{watchlist.length} STOCKS</span>
             </div>
+
             {watchlist.length === 0 ? (
-              <div className="text-center py-6">
-                <Star size={28} className="text-gray-200 mx-auto mb-2" />
-                <p className="text-gray-400 text-sm">No stocks saved yet.</p>
-                <p className="text-gray-400 text-xs mt-1">Click the ★ on any stock to add it.</p>
+              <div style={{ textAlign: "center", padding: "20px 0" }}>
+                <Star size={28} color="var(--border2)" style={{ display: "block", margin: "0 auto 8px" }} />
+                <p style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text3)" }}>NO STOCKS SAVED</p>
+                <p style={{ fontSize: 12, color: "var(--text3)", marginTop: 4 }}>Click ★ on any stock to save it</p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {watchlist.map(w => (
-                  <div key={w.symbol} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                    <button onClick={() => setSymbol(w.symbol)} className="font-semibold text-sm text-indigo-600 hover:underline">
-                      {w.symbol}
-                    </button>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400">Added {new Date(w.addedAt).toLocaleDateString()}</span>
-                      <button
-                        onClick={() => { const next = watchlist.filter(x => x.symbol !== w.symbol); setWatchlist(next); saveWatchlist(next); }}
-                        className="text-gray-300 hover:text-red-400 transition-colors"
-                      >
-                        <X size={14} />
-                      </button>
+                  <div key={w.symbol} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 7, transition: "border-color 0.15s" }}
+                    onMouseEnter={e => (e.currentTarget.style.borderColor = "rgba(255,214,0,0.3)")}
+                    onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border)")}
+                  >
+                    <div>
+                      <button onClick={() => setSymbol(w.symbol)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700, color: "var(--em)", padding: 0 }}>{w.symbol}</button>
+                      <p style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", marginTop: 1 }}>{new Date(w.addedAt).toLocaleDateString()}</p>
                     </div>
+                    <button onClick={() => { const next = watchlist.filter(x => x.symbol !== w.symbol); setWatchlist(next); saveWatchlist(next); }}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text3)", transition: "color 0.15s", padding: 4 }}
+                      onMouseEnter={e => (e.currentTarget.style.color = "var(--red)")}
+                      onMouseLeave={e => (e.currentTarget.style.color = "var(--text3)")}
+                    ><X size={13} /></button>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-        </div>
+          </motion.div>
 
-        {/* Learn more */}
-        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-6 flex items-center justify-between">
-          <div>
-            <h3 className="font-semibold text-gray-800 mb-1">New to stocks?</h3>
-            <p className="text-sm text-gray-600">Check out our beginner guide to understand how stocks work before investing.</p>
-          </div>
-          <a
-            href="/Educational_M"
-            className="flex items-center gap-2 bg-white border border-indigo-200 text-indigo-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-indigo-50 transition-colors shrink-0 ml-4"
+          {/* Learn more */}
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "18px 20px", overflow: "hidden", position: "relative", display: "flex", flexDirection: "column" }}
           >
-            <BookOpen size={15} />
-            Learn
-          </a>
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "linear-gradient(90deg, transparent, #A855F7, transparent)" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
+              <BookOpen size={13} color="#A855F7" />
+              <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "#A855F7", letterSpacing: "1px" }}>LEARN</span>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
+              {[
+                { label: "What is a Stock?",        href: "/Educational_Modules", color: "#00FF88" },
+                { label: "Risk vs. Reward",          href: "/Educational_Modules", color: "#00CFFF" },
+                { label: "How to Read Charts",       href: "/Educational_Modules", color: "#A855F7" },
+                { label: "Dollar-Cost Averaging",    href: "/Educational_Modules", color: "#FF6B35" },
+                { label: "Index Funds for Beginners", href: "/Educational_Modules", color: "#FFD600" },
+              ].map((item, i) => (
+                <a key={i} href={item.href} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 12px", background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, textDecoration: "none", transition: "all 0.15s", cursor: "pointer" }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = item.color + "40"; (e.currentTarget as HTMLAnchorElement).style.background = "var(--surface2)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLAnchorElement).style.background = "var(--bg3)"; }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 5, height: 5, borderRadius: "50%", background: item.color, boxShadow: `0 0 6px ${item.color}`, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: "var(--text2)" }}>{item.label}</span>
+                  </div>
+                  <Zap size={11} color={item.color} />
+                </a>
+              ))}
+            </div>
+          </motion.div>
         </div>
       </div>
 
+      {/* Modals */}
       <AnimatePresence>
-        {showExplain && (
-          <AIExplainModal symbol={symbol} points={points} quote={quote} onClose={() => setShowExplain(false)} />
-        )}
-        {showTrade && quote && (
-          <TradeModal symbol={symbol} price={quote.price} portfolio={portfolio} onClose={() => setShowTrade(false)} onTrade={handleTrade} />
+        {showExplain && <AIExplainModal symbol={symbol} points={points} quote={quote} onClose={() => setShowExplain(false)} />}
+        {showTrade && quote && <TradeModal symbol={symbol} price={quote.price} portfolio={portfolio} onClose={() => setShowTrade(false)} onTrade={handleTrade} />}
+      </AnimatePresence>
+
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+            style={{ position: "fixed", bottom: 100, left: "50%", transform: "translateX(-50%)", background: "var(--surface2)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 13, fontFamily: "var(--mono)", padding: "10px 20px", borderRadius: 100, zIndex: 300, boxShadow: "0 4px 20px rgba(0,0,0,0.4)", whiteSpace: "nowrap", letterSpacing: "0.3px" }}
+          >{toast}</motion.div>
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-full shadow-lg z-50"
-          >
-            {toast}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <style>{`
+        @keyframes pulse-em { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+        @media (max-width: 900px) { .fm-stock-grid { grid-template-columns: 1fr 1fr !important; } }
+        @media (max-width: 600px) { .fm-stock-grid { grid-template-columns: 1fr !important; } }
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+      `}</style>
     </div>
   );
 }

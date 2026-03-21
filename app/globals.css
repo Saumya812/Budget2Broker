@@ -1,26 +1,162 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg:          #050A06;
+  --bg2:         #080E09;
+  --bg3:         #0C1510;
+  --surface:     #0F1A12;
+  --surface2:    #142019;
+  --border:      #1A2E1E;
+  --border2:     #214028;
+  --text:        #E8F5E9;
+  --text2:       #7CB98A;
+  --text3:       #3D6647;
+  --em:          #00FF88;
+  --em2:         #00CC6A;
+  --em3:         #00FF4433;
+  --em-glow:     0 0 20px #00FF8844, 0 0 60px #00FF8822;
+  --em-glow-sm:  0 0 10px #00FF8866;
+  --red:         #FF4444;
+  --red-bg:      #1A0808;
+  --yellow:      #FFD600;
+  --radius:      8px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+  --mono:        'Space Mono', monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Space Grotesk', sans-serif;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+::selection { background: var(--em); color: #000; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+a { color: inherit; text-decoration: none; }
+
+.em { color: var(--em); }
+.mono { font-family: var(--mono); }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.glow-border {
+  border: 1px solid var(--em2);
+  box-shadow: 0 0 0 1px var(--em3), var(--em-glow);
+}
+
+.btn-em {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 28px;
+  background: var(--em);
+  color: #000;
+  border: none;
+  border-radius: var(--radius);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  box-shadow: var(--em-glow-sm);
+}
+.btn-em:hover {
+  background: #fff;
+  box-shadow: var(--em-glow);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 28px;
+  background: transparent;
+  color: var(--em);
+  border: 1px solid var(--em2);
+  border-radius: var(--radius);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+}
+.btn-ghost:hover {
+  background: var(--em3);
+  box-shadow: var(--em-glow-sm);
+}
+
+.tag-em {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: var(--em3);
+  color: var(--em);
+  border: 1px solid var(--em2);
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  font-family: var(--mono);
+}
+
+input, select, textarea {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  border-radius: var(--radius);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--em);
+  box-shadow: 0 0 0 3px var(--em3);
+}
+
+@keyframes pulse-em {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
 }

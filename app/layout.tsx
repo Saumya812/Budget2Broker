@@ -1,10 +1,6 @@
 import "./globals.css";
 import Navbar from "@/components/Navbar";
-
-export const metadata = {
-  title: "FinMentor AI",
-  description: "AI-powered financial mentor for students and beginners",
-};
+import MentorWidget from "@/components/MentorWidget";
 
 export default function RootLayout({
   children,
@@ -18,7 +14,11 @@ export default function RootLayout({
         <main className="max-w-7xl mx-auto px-4 py-6">
           {children}
         </main>
+
+        {/* AI Mentor Floating Widget */}
+        <MentorWidget />
       </body>
     </html>
   );
 }
+

@@ -7,8 +7,8 @@ import { TrendingUp, DollarSign, BarChart2, Home, ArrowRight } from "lucide-reac
 const investments = [
   { title: "Stocks",            icon: TrendingUp, href: "/dashboard/learn/stock",        tag: "Live data",  color: "#00C853", desc: "Buy and sell real stocks with live prices and simulated trading." },
   { title: "Bonds",             icon: DollarSign, href: "/dashboard/learn/bonds",        tag: "Stable",     color: "#0091EA", desc: "Low-risk fixed income investments backed by governments and companies." },
-  { title: "Mutual Funds/ETFs", icon: BarChart2,  href: "/dashboard/learn/mutual-funds", tag: "Diversified", color: "#7C4DFF", desc: "Instantly diversified portfolios with one simple investment." },
-  { title: "Real Estate",       icon: Home,       href: "/dashboard/learn/real-estate",  tag: "Tangible",   color: "#FF6D00", desc: "Invest in property and REITs to build long-term wealth." },
+  { title: "Mutual Funds/ETFs", icon: BarChart2,  href: "/dashboard/learn/MutualFunds", tag: "Diversified", color: "#7C4DFF", desc: "Instantly diversified portfolios with one simple investment." },
+  { title: "Real Estate",       icon: Home,       href: "/dashboard/learn/RealEstate",  tag: "Tangible",   color: "#FF6D00", desc: "Invest in property and REITs to build long-term wealth." },
 ];
 
 export default function InvestmentsPage() {

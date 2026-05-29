@@ -566,7 +566,7 @@ export default function LandingPage() {
               No jargon. No gatekeeping. No excuses.
             </p>
             <MagneticBtn href="/dashboard" className="btn-em" style={{ fontSize: 16, padding: "16px 48px" }}>
-              Launch FinMentor <ArrowRight size={18} />
+              Launch Budget2Broker <ArrowRight size={18} />
             </MagneticBtn>
           </div>
         </div>

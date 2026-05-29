@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
         const url = `${BASE}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${AV_KEY}`;
         const res  = await fetch(url, { next: { revalidate: 60 } });
         const data = await res.json();
+        console.log("AV response:", JSON.stringify(data));
         const q    = data["Global Quote"];
 
         if (!q || !q["05. price"]) {

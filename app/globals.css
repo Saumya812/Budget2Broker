@@ -1,7 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
 
-:root {
+/* ── Dark theme (default) ── */
+:root, [data-theme="dark"] {
   --bg:          #050A06;
   --bg2:         #080E09;
   --bg3:         #0C1510;
@@ -14,12 +15,52 @@
   --text3:       #3D6647;
   --em:          #00FF88;
   --em2:         #00CC6A;
-  --em3:         #00FF4433;
+  --em3:         rgba(0,255,136,0.12);
   --em-glow:     0 0 20px #00FF8844, 0 0 60px #00FF8822;
   --em-glow-sm:  0 0 10px #00FF8866;
   --red:         #FF4444;
   --red-bg:      #1A0808;
   --yellow:      #FFD600;
+  --nav-bg:      rgba(5,10,6,0.92);
+  --nav-border:  rgba(0,255,136,0.08);
+  --nav-text:    #E8F5E9;
+  --nav-text2:   #7CB98A;
+  --card-hover:  #162019;
+  --input-bg:    #142019;
+  --shadow:      rgba(0,0,0,0.4);
+  --radius:      8px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+  --mono:        'Space Mono', monospace;
+}
+
+/* ── Light theme ── */
+[data-theme="light"] {
+  --bg:          #F4FBF5;
+  --bg2:         #EDF7EE;
+  --bg3:         #E4F2E6;
+  --surface:     #FFFFFF;
+  --surface2:    #F0F9F1;
+  --border:      rgba(0,120,60,0.12);
+  --border2:     rgba(0,120,60,0.20);
+  --text:        #0D1F10;
+  --text2:       #2A5C35;
+  --text3:       #5A8F65;
+  --em:          #00A855;
+  --em2:         #00843F;
+  --em3:         rgba(0,168,85,0.10);
+  --em-glow:     0 0 20px rgba(0,168,85,0.25), 0 0 60px rgba(0,168,85,0.10);
+  --em-glow-sm:  0 0 10px rgba(0,168,85,0.30);
+  --red:         #CC2222;
+  --red-bg:      #FFF0F0;
+  --yellow:      #B8860B;
+  --nav-bg:      rgba(255,255,255,0.95);
+  --nav-border:  rgba(0,120,60,0.10);
+  --nav-text:    #0D1F10;
+  --nav-text2:   #2A5C35;
+  --card-hover:  #E8F5EA;
+  --input-bg:    #F0F9F1;
+  --shadow:      rgba(0,0,0,0.08);
   --radius:      8px;
   --radius-lg:   14px;
   --radius-xl:   20px;
@@ -37,6 +78,7 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  transition: background 0.3s, color 0.3s;
 }
 
 h1, h2, h3, h4 {
@@ -54,7 +96,7 @@ h1, h2, h3, h4 {
 
 a { color: inherit; text-decoration: none; }
 
-.em { color: var(--em); }
+.em  { color: var(--em); }
 .mono { font-family: var(--mono); }
 
 .card {
@@ -88,7 +130,7 @@ a { color: inherit; text-decoration: none; }
   box-shadow: var(--em-glow-sm);
 }
 .btn-em:hover {
-  background: #fff;
+  opacity: 0.9;
   box-shadow: var(--em-glow);
   transform: translateY(-1px);
 }
@@ -131,7 +173,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 input, select, textarea {
-  background: var(--surface2);
+  background: var(--input-bg);
   border: 1px solid var(--border2);
   color: var(--text);
   font-family: 'Space Grotesk', sans-serif;
@@ -144,19 +186,34 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 3px var(--em3);
 }
 
+/* ── Light mode overrides for hardcoded dark values ── */
+[data-theme="light"] .fm-grid-bg { display: none; }
+
+[data-theme="light"] body {
+  background: var(--bg);
+}
+
 @keyframes pulse-em {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  50%       { opacity: 0.4; }
 }
 @keyframes scan {
-  0% { transform: translateY(-100%); }
+  0%   { transform: translateY(-100%); }
   100% { transform: translateY(100vh); }
 }
 @keyframes float {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+  50%       { transform: translateY(-8px); }
 }
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(24px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30%           { transform: translateY(-6px); }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }

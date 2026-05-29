@@ -2,134 +2,159 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { Menu, X, TrendingUp, Activity } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { TrendingUp, Menu, X, Zap } from "lucide-react";
 
-const links = [
+const LINKS = [
   { href: "/dashboard",           label: "Dashboard" },
   { href: "/dashboard/budget",    label: "Budget" },
   { href: "/dashboard/learn",     label: "Investments" },
   { href: "/Educational_Modules", label: "Learn" },
-  { href: "/calendar", label: "Calendar" },
-  { href: "/dashboard/AIMentor", label: "Chat" },
+  { href: "/calendar",            label: "Calendar" },
+  { href: "/dashboard/AIMentor",  label: "Chat" },
+  { href: "/ReportProblem",       label: "Support" },
+  { href: "/DarkMode",            label: "Theme" },
 ];
 
 export default function Navbar() {
-  const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  const pathname  = usePathname();
+  const [scrolled, setScrolled]   = useState(false);
+  const [mobileOpen, setMobile]   = useState(false);
+  const [btnPos, setBtnPos]       = useState({ x: 0, y: 0 });
+  const btnRef = useRef<HTMLAnchorElement>(null);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  /* Apply saved theme on mount */
+  useEffect(() => {
+    const savedTheme  = localStorage.getItem("fm-theme") ?? "dark";
+    const savedAccent = localStorage.getItem("fm-accent");
+    document.documentElement.setAttribute("data-theme", savedTheme === "light" ? "light" : "dark");
+    if (savedAccent) {
+      document.documentElement.style.setProperty("--em",  savedAccent);
+      document.documentElement.style.setProperty("--em3", savedAccent + "20");
+      document.documentElement.style.setProperty("--em2", savedAccent + "30");
+    }
+  }, []);
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    setBtnPos({ x: (e.clientX - r.left - r.width / 2) * 0.3, y: (e.clientY - r.top - r.height / 2) * 0.3 });
+  };
 
   return (
     <>
       <nav style={{
-        position: "sticky", top: 0, zIndex: 100,
-        background: "rgba(8,14,9,0.85)",
-        borderBottom: "1px solid var(--border)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
+        background: scrolled ? "var(--nav-bg)" : "transparent",
+        backdropFilter: scrolled ? "blur(20px)" : "none",
+        borderBottom: scrolled ? "1px solid var(--nav-border)" : "1px solid transparent",
+        transition: "all 0.3s",
       }}>
-        {/* Top green line */}
-        <div style={{ height: 1, background: "linear-gradient(90deg, transparent, var(--em), transparent)", opacity: 0.4 }} />
+        {/* Green top accent line */}
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg, transparent, var(--em), transparent)", opacity: scrolled ? 1 : 0, transition: "opacity 0.3s" }} />
 
-        <div style={{
-          maxWidth: 1200, margin: "0 auto", padding: "0 24px",
-          height: 60,
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-        }}>
+        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 24px", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+
           {/* Logo */}
-          <Link href="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{
-              width: 32, height: 32,
-              background: "var(--em3)",
-              border: "1px solid var(--em2)",
-              borderRadius: 8,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "var(--em-glow-sm)",
-            }}>
-              <TrendingUp size={16} color="var(--em)" strokeWidth={2} />
+          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
+            <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--em3)", border: "1px solid var(--em2)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "var(--em-glow-sm)" }}>
+              <TrendingUp size={18} color="var(--em)" strokeWidth={2.5} />
             </div>
-            <span style={{
-              fontFamily: "'Space Grotesk', sans-serif",
-              fontSize: 17, fontWeight: 700,
-              color: "var(--text)",
-              letterSpacing: "-0.02em",
-            }}>
+            <span style={{ fontSize: 17, fontWeight: 700, color: "var(--nav-text)", letterSpacing: "-0.02em" }}>
               Fin<span style={{ color: "var(--em)" }}>Mentor</span>
             </span>
           </Link>
 
-          {/* Desktop nav */}
-          <div style={{ display: "flex", alignItems: "center", gap: 2 }} className="fm-desktop-nav">
-            {links.map(l => {
-              const active = pathname === l.href || (l.href !== "/" && pathname.startsWith(l.href));
+          {/* Desktop links */}
+          <div style={{ display: "flex", alignItems: "center", gap: 2 }} className="fm-nav-links">
+            {LINKS.map(l => {
+              const active = pathname === l.href || pathname.startsWith(l.href + "/");
               return (
                 <Link key={l.href} href={l.href} style={{
-                  padding: "6px 14px",
-                  borderRadius: 6,
+                  padding: "6px 14px", borderRadius: 8,
                   fontSize: 13, fontWeight: active ? 600 : 400,
-                  color: active ? "var(--em)" : "var(--text2)",
+                  color: active ? "var(--em)" : "var(--nav-text2)",
                   background: active ? "var(--em3)" : "transparent",
-                  textDecoration: "none",
-                  transition: "all 0.15s",
-                  letterSpacing: active ? "0.01em" : "0",
-                  border: active ? "1px solid var(--border2)" : "1px solid transparent",
-                }}>
-                  {l.label}
-                </Link>
+                  border: active ? "1px solid var(--em2)" : "1px solid transparent",
+                  textDecoration: "none", transition: "all 0.15s",
+                  letterSpacing: active ? "0.01em" : "normal",
+                }}
+                  onMouseEnter={e => { if (!active) { e.currentTarget.style.color = "var(--nav-text)"; e.currentTarget.style.background = "var(--bg3)"; } }}
+                  onMouseLeave={e => { if (!active) { e.currentTarget.style.color = "var(--nav-text2)"; e.currentTarget.style.background = "transparent"; } }}
+                >{l.label}</Link>
               );
             })}
           </div>
 
-          {/* Right */}
+          {/* Right side */}
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {/* Live indicator */}
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }} className="fm-desktop-nav">
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--em)", boxShadow: "var(--em-glow-sm)", animation: "pulse-em 2s infinite", display: "inline-block" }} />
+            {/* Live dot */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }} className="fm-nav-live">
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--em)", boxShadow: "0 0 8px var(--em)", animation: "pulse-em 2s infinite" }} />
               <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--em)", fontWeight: 700, letterSpacing: "1px" }}>LIVE</span>
             </div>
 
-            <Link href="/dashboard" className="btn-em" style={{ padding: "7px 18px", fontSize: 12, gap: 6 }}>
-              <Activity size={13} /> Open App
+            {/* Open App button */}
+            <Link href="/dashboard" ref={btnRef}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={() => setBtnPos({ x: 0, y: 0 })}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "8px 18px",
+                background: "var(--em)", color: "#000",
+                borderRadius: 9, fontSize: 13, fontWeight: 700,
+                textDecoration: "none",
+                transform: `translate(${btnPos.x}px, ${btnPos.y}px)`,
+                transition: "transform 0.2s, box-shadow 0.2s",
+                boxShadow: "var(--em-glow-sm)",
+              }}
+              className="fm-nav-cta"
+            >
+              <Zap size={13} strokeWidth={2.5} /> Open App
             </Link>
 
-            <button
-              onClick={() => setOpen(!open)}
-              style={{ display: "none", background: "none", border: "none", cursor: "pointer", color: "var(--text)", padding: 4 }}
-              className="fm-mobile-btn"
+            {/* Mobile hamburger */}
+            <button onClick={() => setMobile(o => !o)}
+              style={{ background: "none", border: "1px solid var(--border2)", borderRadius: 7, width: 36, height: 36, cursor: "pointer", color: "var(--nav-text2)", display: "none", alignItems: "center", justifyContent: "center" }}
+              className="fm-nav-hamburger"
             >
-              {open ? <X size={20} /> : <Menu size={20} />}
+              {mobileOpen ? <X size={16} /> : <Menu size={16} />}
             </button>
           </div>
         </div>
 
         {/* Mobile menu */}
-        {open && (
-          <div style={{
-            borderTop: "1px solid var(--border)",
-            background: "var(--bg2)",
-            padding: "8px 24px 20px",
-          }}>
-            {links.map(l => (
-              <Link key={l.href} href={l.href} onClick={() => setOpen(false)} style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "12px 0",
-                fontSize: 15, fontWeight: 500,
-                color: "var(--text)",
-                textDecoration: "none",
-                borderBottom: "1px solid var(--border)",
-              }}>
-                {l.label}
-                <span style={{ color: "var(--em)", fontSize: 12 }}>→</span>
-              </Link>
-            ))}
+        {mobileOpen && (
+          <div style={{ background: "var(--nav-bg)", backdropFilter: "blur(20px)", borderTop: "1px solid var(--nav-border)", padding: "12px 24px 20px" }}>
+            {LINKS.map(l => {
+              const active = pathname === l.href;
+              return (
+                <Link key={l.href} href={l.href} onClick={() => setMobile(false)}
+                  style={{ display: "block", padding: "10px 14px", borderRadius: 8, fontSize: 14, fontWeight: active ? 600 : 400, color: active ? "var(--em)" : "var(--nav-text)", background: active ? "var(--em3)" : "transparent", textDecoration: "none", marginBottom: 4, transition: "all 0.15s" }}
+                >{l.label}</Link>
+              );
+            })}
+            <Link href="/dashboard" onClick={() => setMobile(false)}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "11px", background: "var(--em)", color: "#000", borderRadius: 9, fontSize: 14, fontWeight: 700, textDecoration: "none", marginTop: 8 }}
+            >
+              <Zap size={14} /> Open App
+            </Link>
           </div>
         )}
       </nav>
 
+      {/* Spacer */}
+      <div style={{ height: 64 }} />
+
       <style>{`
-        @media (max-width: 768px) {
-          .fm-desktop-nav { display: none !important; }
-          .fm-mobile-btn { display: flex !important; }
-        }
+        @media (max-width: 900px) { .fm-nav-links { display: none !important; } .fm-nav-live { display: none !important; } .fm-nav-cta { display: none !important; } .fm-nav-hamburger { display: flex !important; } }
+        @keyframes pulse-em { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
       `}</style>
     </>
   );

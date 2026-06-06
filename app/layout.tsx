@@ -9,13 +9,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-gray-50 text-gray-900">
+      <body style={{ margin: 0, padding: 0, background: "var(--bg)", color: "var(--text)" }}>
         <Navbar />
-        <main className="max-w-7xl mx-auto px-4 py-6">
-          {children}
+        <main style={{ minHeight: "100vh" }}>
+            {children}
         </main>
-
-        {/* AI Mentor Floating Widget */}
         <MentorWidget />
       </body>
     </html>

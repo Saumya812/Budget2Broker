@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import {
   Plus, Trash2, TrendingUp, TrendingDown,
   Wallet, Zap, Activity, ChevronUp, ChevronDown,
@@ -108,6 +108,7 @@ const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent
 
 export default function BudgetSummary() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [loaded, setLoaded]     = useState(false);
   const [name, setName]         = useState("");
   const [category, setCategory] = useState("Food");
   const [amount, setAmount]     = useState("");
@@ -117,16 +118,21 @@ export default function BudgetSummary() {
   const [addOpen, setAddOpen]   = useState(false);
   const listRef                 = useRef<HTMLDivElement>(null);
 
+  // Load from localStorage FIRST
   useEffect(() => {
     try {
       const s = localStorage.getItem("budgetData");
       if (s) setExpenses(JSON.parse(s));
     } catch {}
+    setLoaded(true);
   }, []);
 
+  // Only save AFTER initial load is complete
   useEffect(() => {
-    localStorage.setItem("budgetData", JSON.stringify(expenses));
-  }, [expenses]);
+    if (loaded) {
+      localStorage.setItem("budgetData", JSON.stringify(expenses));
+    }
+  }, [expenses, loaded]);
 
   const addExpense = () => {
     if (!name.trim() || !amount) return;

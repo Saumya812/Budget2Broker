@@ -1,5 +1,3 @@
-
-
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -10,58 +8,55 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid messages" }, { status: 400 });
     }
 
-    const systemPrompt = `You are FinMentor, a warm, knowledgeable, and encouraging personal financial mentor built into a budgeting and investing app called FinMentor AI. Your users are primarily students and beginners who may feel intimidated by finance and investing.
+    const systemPrompt = `You are Budget2Broker AI, a warm, knowledgeable personal financial mentor. Your users are students and beginners who may feel intimidated by finance.
 
 Your role:
-- Act like a trusted friend who happens to be a financial expert
-- Explain complex concepts in plain, jargon-free language
-- Give specific, actionable advice based on the user's actual budget data when available
-- Be encouraging and positive — never make the user feel judged about their spending
-- If they ask about investments, explain the options clearly and help them understand risk
-- You can help them build investment plans, savings goals, and budgets
-- When relevant, reference their actual budget data to make advice personalized
+- Act like a trusted friend who is a financial expert
+- Explain concepts in plain, jargon-free language
+- Give specific, actionable advice based on the user's budget data when available
+- Be encouraging — never make users feel judged about spending
+- Keep responses concise — 2-4 short paragraphs max
 
-Personality: Warm, encouraging, clear, practical. Use occasional emojis to keep things friendly but don't overdo it.
-
-Response length: Keep responses concise — 2-4 short paragraphs max. Use bullet points for lists. Users are on a mobile-sized chat widget.
-
-Important disclaimer: Always remind users that your advice is educational and not a substitute for a licensed financial advisor when discussing specific investment decisions.
-
-Here is the user's current financial data from their budget tracker:
+Here is the user's current financial data:
 ---
 ${budgetContext}
 ---
 
-Use this data to personalize your responses whenever relevant. If they haven't added budget data yet, gently encourage them to do so for better personalized advice.`;
+Use this data to personalize your responses. If no budget data exists, encourage them to add some.
+Important: Your advice is educational, not a substitute for a licensed financial advisor.`;
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
-        "x-api-key": process.env.ANTHROPIC_API_KEY!,
+        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "llama-3.3-70b-versatile",
         max_tokens: 1024,
-        system: systemPrompt,
-        messages: messages.map((m: { role: string; content: string }) => ({
-          role: m.role,
-          content: m.content,
-        })),
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...messages.map((m: { role: string; content: string }) => ({
+            role: m.role,
+            content: m.content,
+          })),
+        ],
       }),
     });
 
     if (!response.ok) {
       const err = await response.text();
-      console.error("Anthropic API error:", err);
-      return NextResponse.json({ error: "Anthropic API error" }, { status: 500 });
+      console.error("Groq API error:", err);
+      return NextResponse.json({ error: "Groq API error" }, { status: 500 });
     }
 
     const data = await response.json();
-    return NextResponse.json(data);
+    const text = data.choices?.[0]?.message?.content ?? "Sorry, I could not get a response.";
+
+    // Return in same format the frontend expects
+    return NextResponse.json({ content: [{ type: "text", text }] });
   } catch (err) {
-    console.error("Mentor API route error:", err);
+    console.error("Mentor API error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

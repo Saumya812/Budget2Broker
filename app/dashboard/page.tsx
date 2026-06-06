@@ -1,5 +1,6 @@
 "use client";
 
+import InvestmentPlan from "@/components/InvestmentPlan";
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -398,6 +399,45 @@ export default function DashboardPage() {
             {investments.map((inv, i) => (
               <InvCard key={i} {...inv} delay={0.65 + i * 0.08} />
             ))}
+          </div>
+        </motion.div>
+
+
+        {/* ── AI Investment Planner ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.85 }}
+          style={{ marginTop: 24 }}
+        >
+          <div style={{
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-lg)",
+            overflow: "hidden",
+          }}>
+            {/* Section header */}
+            <div style={{
+              borderBottom: "1px solid var(--border)",
+              padding: "16px 24px",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              background: "var(--bg3)",
+            }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: 8,
+                background: "rgba(0,255,136,0.1)",
+                border: "1px solid rgba(0,255,136,0.25)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <Zap size={13} color="var(--em)" />
+              </div>
+              <div>
+                <p style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--em)", letterSpacing: "1.5px" }}>// AI PLANNER</p>
+              </div>
+            </div>
+            <InvestmentPlan />
           </div>
         </motion.div>
 

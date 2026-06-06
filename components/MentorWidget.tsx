@@ -115,7 +115,7 @@ export default function MentorWidget() {
                 </div>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>FinMentor AI</p>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Budget2Broker AI</p>
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                       <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--em)", display: "inline-block", boxShadow: "0 0 6px var(--em)", animation: "pulse-em 2s infinite" }} />
                       <span style={{ fontFamily: "var(--mono)", fontSize: 8, color: "var(--em)", fontWeight: 700, letterSpacing: "1px" }}>ONLINE</span>

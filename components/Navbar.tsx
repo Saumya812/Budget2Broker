@@ -67,7 +67,7 @@ export default function Navbar() {
               <TrendingUp size={18} color="var(--em)" strokeWidth={2.5} />
             </div>
             <span style={{ fontSize: 17, fontWeight: 700, color: "var(--nav-text)", letterSpacing: "-0.02em" }}>
-              Fin<span style={{ color: "var(--em)" }}>Mentor</span>
+              Budget<span style={{ color: "var(--em)" }}>2Broker</span>
             </span>
           </Link>
 

@@ -103,7 +103,7 @@ function MessageBubble({ msg, onCopy }: { msg: Message; onCopy: (text: string) =
 
       <div style={{ maxWidth: "72%", display: "flex", flexDirection: "column", gap: 4, alignItems: isUser ? "flex-end" : "flex-start" }}>
         <span style={{ fontFamily: "var(--mono)", fontSize: 9, color: isUser ? "#00CFFF" : "var(--em)", letterSpacing: "1px", opacity: 0.7 }}>
-          {isUser ? "YOU" : "FINMENTOR AI"}
+          {isUser ? "YOU" : "Budget2Broker AI"}
         </span>
         <div style={{
           background: isUser ? "linear-gradient(135deg, rgba(0,207,255,0.15), rgba(0,207,255,0.08))" : "var(--surface2)",
@@ -213,7 +213,7 @@ export default function AImentorPage() {
           </div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <h1 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>FinMentor AI</h1>
+              <h1 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Budget2Broker AI</h1>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--em)", display: "inline-block", boxShadow: "0 0 8px var(--em)", animation: "pulse-em 2s infinite" }} />
                 <span style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--em)", fontWeight: 700, letterSpacing: "1px" }}>ONLINE</span>

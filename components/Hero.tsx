@@ -57,7 +57,7 @@ export default function Hero() {
           transition={{ delay: 0.4 }}
           className="text-lg text-gray-600 max-w-3xl mx-auto mb-12"
         >
-          FinMentor combines budgeting, investing education, and an AI mentor
+          Budget2Broker combines budgeting, investing education, and an AI mentor
           to help you make confident financial decisions — even if you’re just starting.
         </motion.p>
 

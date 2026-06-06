@@ -2,9 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BASE = "https://www.alphavantage.co/query";
 
+// Server-side cache — survives across requests
+const cache: Record<string, { data: unknown; ts: number }> = {};
+const CACHE_MS = 5 * 60 * 1000; // 5 minutes
+
+async function cachedFetch(url: string): Promise<unknown> {
+  const cached = cache[url];
+  if (cached && Date.now() - cached.ts < CACHE_MS) {
+    return cached.data;
+  }
+  const res  = await fetch(url, { cache: "no-store" });
+  const data = await res.json();
+  cache[url] = { data, ts: Date.now() };
+  return data;
+}
+
 export async function GET(req: NextRequest) {
   const AV_KEY = process.env.ALPHA_VANTAGE_KEY ?? "demo";
-  console.log("AV_KEY:", AV_KEY);
 
   const { searchParams } = new URL(req.url);
   const action = searchParams.get("action");
@@ -12,35 +26,53 @@ export async function GET(req: NextRequest) {
 
   try {
     switch (action) {
-      case "quote": {
-        const url = `${BASE}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${AV_KEY}`;
-        const res  = await fetch(url, { next: { revalidate: 60 } });
-        const data = await res.json();
-        console.log("AV response:", JSON.stringify(data));
-        const q    = data["Global Quote"];
 
-        if (!q || !q["05. price"]) {
+      case "quote":
+      case "daily": {
+        const url  = `${BASE}?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=compact&apikey=${AV_KEY}`;
+        const data = await cachedFetch(url) as Record<string, unknown>;
+        const series = data["Time Series (Daily)"] as Record<string, Record<string, string>> | undefined;
+
+        if (!series) {
           return NextResponse.json({ error: "Symbol not found or API limit reached" }, { status: 404 });
         }
 
+        const entries = Object.entries(series);
+        const [latestDay, latestVal] = entries[0];
+        const [,          prevVal]   = entries[1];
+
+        const price     = parseFloat(latestVal["4. close"]);
+        const prevClose = parseFloat(prevVal["4. close"]);
+        const change    = price - prevClose;
+        const changePct = ((change / prevClose) * 100).toFixed(4) + "%";
+
+        const points = entries.slice(0, 90).reverse().map(([date, val]) => ({
+          time:   date,
+          open:   parseFloat(val["1. open"]),
+          high:   parseFloat(val["2. high"]),
+          low:    parseFloat(val["3. low"]),
+          close:  parseFloat(val["4. close"]),
+          volume: parseInt(val["5. volume"]),
+        }));
+
         return NextResponse.json({
-          symbol:    q["01. symbol"],
-          price:     parseFloat(q["05. price"]),
-          change:    parseFloat(q["09. change"]),
-          changePct: q["10. change percent"],
-          high:      parseFloat(q["03. high"]),
-          low:       parseFloat(q["04. low"]),
-          volume:    parseInt(q["06. volume"]),
-          prevClose: parseFloat(q["08. previous close"]),
-          latestDay: q["07. latest trading day"],
+          symbol,
+          price,
+          change,
+          changePct,
+          high:      parseFloat(latestVal["2. high"]),
+          low:       parseFloat(latestVal["3. low"]),
+          volume:    parseInt(latestVal["5. volume"]),
+          prevClose,
+          latestDay,
+          points,
         });
       }
 
       case "intraday": {
         const url  = `${BASE}?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=60min&outputsize=compact&apikey=${AV_KEY}`;
-        const res  = await fetch(url, { next: { revalidate: 300 } });
-        const data = await res.json();
-        const series = data["Time Series (60min)"];
+        const data = await cachedFetch(url) as Record<string, unknown>;
+        const series = data["Time Series (60min)"] as Record<string, Record<string, string>> | undefined;
 
         if (!series) {
           return NextResponse.json({ error: "No intraday data" }, { status: 404 });
@@ -49,45 +81,14 @@ export async function GET(req: NextRequest) {
         const points = Object.entries(series)
           .slice(0, 30)
           .reverse()
-          .map(([time, val]: [string, unknown]) => {
-            const v = val as Record<string, string>;
-            return {
-              time,
-              open:   parseFloat(v["1. open"]),
-              high:   parseFloat(v["2. high"]),
-              low:    parseFloat(v["3. low"]),
-              close:  parseFloat(v["4. close"]),
-              volume: parseInt(v["5. volume"]),
-            };
-          });
-
-        return NextResponse.json({ symbol, points });
-      }
-
-      case "daily": {
-        const url  = `${BASE}?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=compact&apikey=${AV_KEY}`;
-        const res  = await fetch(url, { next: { revalidate: 3600 } });
-        const data = await res.json();
-        const series = data["Time Series (Daily)"];
-
-        if (!series) {
-          return NextResponse.json({ error: "No daily data" }, { status: 404 });
-        }
-
-        const points = Object.entries(series)
-          .slice(0, 90)
-          .reverse()
-          .map(([date, val]: [string, unknown]) => {
-            const v = val as Record<string, string>;
-            return {
-              time:   date,
-              open:   parseFloat(v["1. open"]),
-              high:   parseFloat(v["2. high"]),
-              low:    parseFloat(v["3. low"]),
-              close:  parseFloat(v["4. close"]),
-              volume: parseInt(v["5. volume"]),
-            };
-          });
+          .map(([time, val]) => ({
+            time,
+            open:   parseFloat(val["1. open"]),
+            high:   parseFloat(val["2. high"]),
+            low:    parseFloat(val["3. low"]),
+            close:  parseFloat(val["4. close"]),
+            volume: parseInt(val["5. volume"]),
+          }));
 
         return NextResponse.json({ symbol, points });
       }
@@ -95,9 +96,8 @@ export async function GET(req: NextRequest) {
       case "search": {
         const keywords = searchParams.get("q") ?? symbol;
         const url  = `${BASE}?function=SYMBOL_SEARCH&keywords=${keywords}&apikey=${AV_KEY}`;
-        const res  = await fetch(url, { next: { revalidate: 3600 } });
-        const data = await res.json();
-        const matches = (data.bestMatches ?? []).slice(0, 6).map((m: Record<string, string>) => ({
+        const data = await cachedFetch(url) as Record<string, unknown>;
+        const matches = ((data as Record<string, unknown>).bestMatches as Record<string, string>[] ?? []).slice(0, 6).map((m) => ({
           symbol:   m["1. symbol"],
           name:     m["2. name"],
           type:     m["3. type"],

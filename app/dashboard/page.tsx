@@ -1,9 +1,15 @@
 "use client";
 
 import InvestmentPlan from "@/components/InvestmentPlan";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { useAuthFetch } from "@/lib/use-auth-fetch";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  PieChart, Pie, Cell, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
 import {
   ArrowRight, TrendingUp, TrendingDown, Wallet, BookOpen,
   Bot, BarChart2, Home, DollarSign, Zap, Activity,
@@ -214,7 +220,94 @@ function LiveDot() {
 }
 
 /* ── Main ── */
-type Expense = { name: string; amount: number; type: "income" | "expense"; category: string };
+type Expense = { name: string; amount: number; type: "income" | "expense"; category: string; created_at?: string };
+
+const CAT_COLORS = ["#00FF88", "#00CFFF", "#A855F7", "#FF6B35", "#FFD600", "#FF4488", "#00D4FF", "#FF8800"];
+
+/* ── Spending by category donut ── */
+function CategoryChart({ data }: { data: { name: string; value: number; color: string }[] }) {
+  const [active, setActive] = useState<number | null>(null);
+  const total = data.reduce((s, d) => s + d.value, 0);
+  return (
+    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px" }}>
+      <p style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--em)", letterSpacing: "2px", marginBottom: 16 }}>// SPENDING BY CATEGORY</p>
+      {data.length === 0 ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 160, color: "var(--text3)", fontSize: 12, fontFamily: "var(--mono)" }}>No expense data yet</div>
+      ) : (
+        <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+          <div style={{ flexShrink: 0 }}>
+            <ResponsiveContainer width={150} height={150}>
+              <PieChart>
+                <Pie data={data} cx="50%" cy="50%" innerRadius={42} outerRadius={66} paddingAngle={2} dataKey="value"
+                  onMouseEnter={(_, i) => setActive(i)} onMouseLeave={() => setActive(null)}
+                >
+                  {data.map((d, i) => (
+                    <Cell key={i} fill={d.color} stroke="transparent" opacity={active === null || active === i ? 1 : 0.35} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 9 }}>
+            {data.slice(0, 6).map((d, i) => (
+              <div key={i} onMouseEnter={() => setActive(i)} onMouseLeave={() => setActive(null)}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", opacity: active === null || active === i ? 1 : 0.4, transition: "opacity 0.15s", cursor: "default" }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: d.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: "var(--text2)" }}>{d.name}</span>
+                </div>
+                <div>
+                  <span style={{ fontFamily: "var(--mono)", fontSize: 11, fontWeight: 700, color: d.color }}>${d.value.toFixed(0)}</span>
+                  <span style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", marginLeft: 6 }}>{Math.round((d.value / total) * 100)}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Monthly income vs expense bar chart ── */
+function MonthlyChart({ data }: { data: { month: string; income: number; expense: number }[] }) {
+  const hasData = data.some(d => d.income > 0 || d.expense > 0);
+  return (
+    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <p style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--em)", letterSpacing: "2px" }}>// MONTHLY TREND</p>
+        <div style={{ display: "flex", gap: 14 }}>
+          {[{ label: "Income", color: "#00FF88" }, { label: "Expenses", color: "#FF4444" }].map(l => (
+            <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: l.color }} />
+              <span style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)" }}>{l.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      {!hasData ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 150, color: "var(--text3)", fontSize: 12, fontFamily: "var(--mono)" }}>No data yet</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={170}>
+          <BarChart data={data} barGap={3} barCategoryGap="30%">
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontFamily: "var(--mono)", fontSize: 10, fill: "#666" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontFamily: "var(--mono)", fontSize: 9, fill: "#555" }} axisLine={false} tickLine={false} width={44}
+              tickFormatter={v => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`} />
+            <Tooltip
+              contentStyle={{ background: "#111", border: "1px solid #333", borderRadius: 8, fontFamily: "var(--mono)", fontSize: 11 }}
+              labelStyle={{ color: "#aaa" }}
+              formatter={(v: number | undefined, name: string | undefined) => [`$${(v ?? 0).toFixed(2)}`, ((name ?? "") === "income" ? "Income" : "Expenses")] as [string, string]}
+            />
+            <Bar dataKey="income"  fill="#00FF88" radius={[4, 4, 0, 0]} opacity={0.85} />
+            <Bar dataKey="expense" fill="#FF4444" radius={[4, 4, 0, 0]} opacity={0.85} />
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
+}
 
 const investments = [
   { title: "Stocks",       Icon: TrendingUp,  href: "/dashboard/learn/stock",        tag: "LIVE",    color: "#00FF88", desc: "Real-time prices + AI chart explanations." },
@@ -224,15 +317,21 @@ const investments = [
 ];
 
 export default function DashboardPage() {
+  const { isLoaded, userId } = useAuth();
+  const authFetch = useAuthFetch();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [hideBalance, setHideBalance] = useState(false);
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("budgetData");
-      if (raw) setExpenses(JSON.parse(raw));
-    } catch {}
+    if (!isLoaded || !userId) return;
+    authFetch("/api/budget")
+      .then(r => r.json())
+      .then(data => { if (data.expenses) setExpenses(data.expenses); })
+      .catch(() => {});
+  }, [isLoaded, userId, authFetch]);
+
+  useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
@@ -242,6 +341,27 @@ export default function DashboardPage() {
   const remaining    = totalIncome - totalExpense;
   const savingsRate  = totalIncome > 0 ? Math.round((remaining / totalIncome) * 100) : 0;
   const spendPct     = totalIncome > 0 ? Math.min(100, Math.round((totalExpense / totalIncome) * 100)) : 0;
+
+  const catData = expenses
+    .filter(e => e.type === "expense")
+    .reduce<{ name: string; value: number; color: string }[]>((acc, e) => {
+      const hit = acc.find(d => d.name === e.category);
+      if (hit) { hit.value += e.amount; return acc; }
+      return [...acc, { name: e.category, value: e.amount, color: CAT_COLORS[acc.length % CAT_COLORS.length] }];
+    }, [])
+    .sort((a, b) => b.value - a.value);
+
+  const monthlyData = Array.from({ length: 6 }, (_, i) => {
+    const d     = new Date(new Date().getFullYear(), new Date().getMonth() - 5 + i, 1);
+    const yr    = d.getFullYear();
+    const mo    = d.getMonth();
+    const match = (e: Expense) => !!e.created_at && new Date(e.created_at).getFullYear() === yr && new Date(e.created_at).getMonth() === mo;
+    return {
+      month:   d.toLocaleDateString("en-US", { month: "short" }),
+      income:  expenses.filter(e => e.type === "income"  && match(e)).reduce((s, e) => s + e.amount, 0),
+      expense: expenses.filter(e => e.type === "expense" && match(e)).reduce((s, e) => s + e.amount, 0),
+    };
+  });
 
   const mask = (v: string) => hideBalance ? "••••••" : v;
 
@@ -333,6 +453,18 @@ export default function DashboardPage() {
             </div>
           </motion.div>
         )}
+
+        {/* ── Analytics ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}
+          className="fm-analytics-grid"
+        >
+          <CategoryChart data={catData} />
+          <MonthlyChart  data={monthlyData} />
+        </motion.div>
 
         {/* ── Quick actions ── */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 32 }} className="fm-grid-3">
@@ -483,7 +615,10 @@ export default function DashboardPage() {
 
       <style>{`
         @keyframes pulse-em { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-        @media (max-width: 640px) { .fm-grid-3 { grid-template-columns: 1fr !important; } }
+        @media (max-width: 640px) {
+          .fm-grid-3 { grid-template-columns: 1fr !important; }
+          .fm-analytics-grid { grid-template-columns: 1fr !important; }
+        }
       `}</style>
     </div>
   );

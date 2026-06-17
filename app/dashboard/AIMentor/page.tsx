@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { useAuthFetch } from "@/lib/use-auth-fetch";
 import { motion } from "framer-motion";
 import {
   Send, Bot, User, Sparkles, TrendingUp, PiggyBank,
@@ -30,23 +32,6 @@ const QUICK_PROMPTS = [
   { icon: TrendingUp, label: "Start investing",      text: "I want to start investing with $500. What should I do first?",                 color: "#FF4488" },
 ];
 
-function getBudgetContext(): string {
-  try {
-    const raw = localStorage.getItem("budgetData");
-    if (!raw) return "The user has not added any budget data yet.";
-    const expenses: { name: string; amount: number; type: "income" | "expense"; category: string }[] = JSON.parse(raw);
-    if (!expenses.length) return "The user has not added any budget entries yet.";
-    const totalIncome  = expenses.filter(e => e.type === "income").reduce((s, e) => s + e.amount, 0);
-    const totalExpense = expenses.filter(e => e.type === "expense").reduce((s, e) => s + e.amount, 0);
-    const remaining    = totalIncome - totalExpense;
-    const byCategory: Record<string, number> = {};
-    expenses.filter(e => e.type === "expense").forEach(e => {
-      byCategory[e.category] = (byCategory[e.category] || 0) + e.amount;
-    });
-    const breakdown = Object.entries(byCategory).map(([cat, amt]) => `  - ${cat}: $${amt.toFixed(2)}`).join("\n");
-    return `User budget summary:\n- Total income: $${totalIncome.toFixed(2)}\n- Total expenses: $${totalExpense.toFixed(2)}\n- Remaining: $${remaining.toFixed(2)}\n- Expense breakdown:\n${breakdown || "  (none)"}`;
-  } catch { return "Could not read budget data."; }
-}
 
 function GridBg() {
   return (
@@ -127,13 +112,36 @@ function MessageBubble({ msg, onCopy }: { msg: Message; onCopy: (text: string) =
 }
 
 export default function AImentorPage() {
-  const [messages, setMessages]   = useState<Message[]>([]);
-  const [input, setInput]         = useState("");
-  const [loading, setLoading]     = useState(false);
-  const [listening, setListening] = useState(false);
+  const { isLoaded, userId } = useAuth();
+  const authFetch = useAuthFetch();
+  const [messages, setMessages]     = useState<Message[]>([]);
+  const [input, setInput]           = useState("");
+  const [loading, setLoading]       = useState(false);
+  const [listening, setListening]   = useState(false);
+  const [budgetContext, setBudgetContext] = useState("The user has not added any budget data yet.");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
   const recRef    = useRef<FakeRec | null>(null);
+
+  useEffect(() => {
+    if (!isLoaded || !userId) return;
+    authFetch("/api/budget")
+      .then(r => r.json())
+      .then(data => {
+        const expenses: { amount: number; type: string; category: string }[] = data.expenses ?? [];
+        if (!expenses.length) return;
+        const totalIncome  = expenses.filter(e => e.type === "income").reduce((s, e) => s + e.amount, 0);
+        const totalExpense = expenses.filter(e => e.type === "expense").reduce((s, e) => s + e.amount, 0);
+        const remaining    = totalIncome - totalExpense;
+        const byCategory: Record<string, number> = {};
+        expenses.filter(e => e.type === "expense").forEach(e => {
+          byCategory[e.category] = (byCategory[e.category] || 0) + e.amount;
+        });
+        const breakdown = Object.entries(byCategory).map(([cat, amt]) => `  - ${cat}: $${amt.toFixed(2)}`).join("\n");
+        setBudgetContext(`User budget summary:\n- Total income: $${totalIncome.toFixed(2)}\n- Total expenses: $${totalExpense.toFixed(2)}\n- Remaining: $${remaining.toFixed(2)}\n- Expense breakdown:\n${breakdown || "  (none)"}`);
+      })
+      .catch(() => {});
+  }, [isLoaded, userId, authFetch]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -158,7 +166,7 @@ export default function AImentorPage() {
       const res = await fetch("/api/finbot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: updated, budgetContext: getBudgetContext() }),
+        body: JSON.stringify({ messages: updated, budgetContext }),
       });
       if (!res.ok) throw new Error();
       const data  = await res.json();
@@ -169,7 +177,7 @@ export default function AImentorPage() {
     } finally {
       setLoading(false);
     }
-  }, [input, messages, loading]);
+  }, [input, messages, loading, budgetContext]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text).catch(() => {});

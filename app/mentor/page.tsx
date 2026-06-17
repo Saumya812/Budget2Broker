@@ -59,7 +59,7 @@ const MODULES: Module[] = [
         content: [
           "The first step to budgeting is knowing where your money goes. Most people underestimate their spending by 20-30%.",
           "Categorize your expenses into fixed (rent, loan payments) and variable (groceries, entertainment). Fixed costs are predictable; variable ones are where you have the most control.",
-          "Use the FinMentor budget tracker to log every purchase for one month. You'll quickly spot patterns — like that daily coffee that costs $1,500/year.",
+          "Use the Budget2Broker budget tracker to log every purchase for one month. You'll quickly spot patterns — like that daily coffee that costs $1,500/year.",
           "💡 Key Takeaway: You can't manage what you don't measure. Even two weeks of tracking will reveal powerful insights about your spending habits.",
         ],
         quiz: {

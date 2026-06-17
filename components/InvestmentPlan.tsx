@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useAuthFetch } from "@/lib/use-auth-fetch";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Sparkles, TrendingUp, Shield, Zap, CheckCircle2,
@@ -29,13 +30,6 @@ interface Plan {
   tips:              string[];
 }
 
-/* ── Helpers ── */
-function getBudgetData() {
-  try {
-    const raw = localStorage.getItem("budgetData");
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
 
 function getRiskColor(risk: string) {
   if (risk === "Conservative") return "#00CFFF";
@@ -107,6 +101,7 @@ function ProjectionBar({ label, value, max, color }: { label: string; value: num
 
 /* ── Main Component ── */
 export default function InvestmentPlan() {
+  const authFetch = useAuthFetch();
   const [plan,     setPlan]     = useState<Plan | null>(null);
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState("");
@@ -121,7 +116,8 @@ export default function InvestmentPlan() {
     setApproved(false);
 
     try {
-      const budgetData = getBudgetData();
+      const budgetJson = await authFetch("/api/budget").then(r => r.json());
+      const budgetData = budgetJson.expenses ?? [];
       const res  = await fetch("/api/generate-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

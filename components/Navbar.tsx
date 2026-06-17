@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { TrendingUp, Menu, X, Zap } from "lucide-react";
+import { Show, UserButton } from "@clerk/nextjs";
 
 const LINKS = [
   { href: "/dashboard",           label: "Dashboard" },
@@ -100,24 +101,43 @@ export default function Navbar() {
               <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--em)", fontWeight: 700, letterSpacing: "1px" }}>LIVE</span>
             </div>
 
-            {/* Open App button */}
-            <Link href="/dashboard" ref={btnRef}
-              onMouseMove={handleMouseMove}
-              onMouseLeave={() => setBtnPos({ x: 0, y: 0 })}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "8px 18px",
-                background: "var(--em)", color: "#000",
-                borderRadius: 9, fontSize: 13, fontWeight: 700,
-                textDecoration: "none",
-                transform: `translate(${btnPos.x}px, ${btnPos.y}px)`,
-                transition: "transform 0.2s, box-shadow 0.2s",
-                boxShadow: "var(--em-glow-sm)",
-              }}
-              className="fm-nav-cta"
-            >
-              <Zap size={13} strokeWidth={2.5} /> Open App
-            </Link>
+            {/* Open App button — only when signed out */}
+            <Show when="signed-out">
+              <Link href="/sign-in" ref={btnRef}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={() => setBtnPos({ x: 0, y: 0 })}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "8px 18px",
+                  background: "var(--em)", color: "#000",
+                  borderRadius: 9, fontSize: 13, fontWeight: 700,
+                  textDecoration: "none",
+                  transform: `translate(${btnPos.x}px, ${btnPos.y}px)`,
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  boxShadow: "var(--em-glow-sm)",
+                }}
+                className="fm-nav-cta"
+              >
+                <Zap size={13} strokeWidth={2.5} /> Sign In
+              </Link>
+            </Show>
+
+            {/* User avatar + dropdown — only when signed in */}
+            <Show when="signed-in">
+              <Link href="/dashboard"
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "8px 14px",
+                  background: "var(--em3)", color: "var(--em)",
+                  borderRadius: 9, fontSize: 13, fontWeight: 700,
+                  textDecoration: "none", border: "1px solid var(--em2)",
+                }}
+                className="fm-nav-cta"
+              >
+                <Zap size={13} strokeWidth={2.5} /> Dashboard
+              </Link>
+              <UserButton />
+            </Show>
 
             {/* Mobile hamburger */}
             <button onClick={() => setMobile(o => !o)}

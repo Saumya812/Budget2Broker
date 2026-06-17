@@ -39,7 +39,7 @@ export default function Overview() {
           Your Personal Guide to Smarter Money
         </h2>
         <p className="text-gray-600 text-lg">
-          FinMentor helps you understand your money, build better habits,
+          Budget2Broker helps you understand your money, build better habits,
           and feel confident about financial decisions — one step at a time.
         </p>
       </motion.div>
@@ -75,13 +75,13 @@ export default function Overview() {
         className="max-w-4xl mx-auto text-center"
       >
         <h3 className="text-3xl font-semibold mb-10">
-          How FinMentor Works
+          How Budget2Broker Works
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {[
             "Add your income & expenses",
-            "FinMentor analyzes your habits",
+            "Budget2Broker analyzes your habits",
             "Get insights & clear next steps",
           ].map((step, i) => (
             <div key={i} className="flex flex-col items-center">

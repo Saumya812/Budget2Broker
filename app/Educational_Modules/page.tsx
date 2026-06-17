@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle, Lock, ChevronRight, ChevronLeft,
@@ -47,7 +47,7 @@ const MODULES: Module[] = [
         content: [
           "The first step to budgeting is knowing where your money goes. Most people underestimate their spending by 20-30%.",
           "Categorize expenses into fixed (rent, loan payments) and variable (groceries, entertainment). Fixed costs are predictable; variable ones are where you have the most control.",
-          "Use the FinMentor budget tracker to log every purchase for one month. You will quickly spot patterns — like a daily coffee that costs $1,500 per year.",
+          "Use the Budget2Broker budget tracker to log every purchase for one month. You will quickly spot patterns — like a daily coffee that costs $1,500 per year.",
           "💡 KEY INSIGHT: You cannot manage what you do not measure. Even two weeks of tracking will reveal powerful insights about your habits.",
         ],
         quiz: { question: "Which type of expense gives you the most control?", options: ["Fixed expenses", "Variable expenses", "One-time expenses", "Tax expenses"], answer: 1 },

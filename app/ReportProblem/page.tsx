@@ -249,7 +249,7 @@ export default function ReportProblemPage() {
 
   const cards = [
     { type: "bug" as FormType,     icon: Bug,          label: "Bug Report",       desc: "Something is broken or not working as expected.", color: "#FF4444", tag: "TECHNICAL" },
-    { type: "feature" as FormType, icon: Lightbulb,    label: "Feature Request",  desc: "Suggest a new feature or improvement to FinMentor.", color: "#00CFFF", tag: "PRODUCT" },
+    { type: "feature" as FormType, icon: Lightbulb,    label: "Feature Request",  desc: "Suggest a new feature or improvement to Budget2Broker.", color: "#00CFFF", tag: "PRODUCT" },
     { type: "feedback" as FormType,icon: MessageSquare, label: "General Feedback", desc: "Share your thoughts, compliments, or concerns.", color: "#A855F7", tag: "GENERAL" },
   ];
 
@@ -363,7 +363,7 @@ export default function ReportProblemPage() {
                   { icon: Bug,          label: "Bug Reports",     desc: "Found a technical issue? We want to know.", color: "#FF4444", action: () => setActiveForm("bug") },
                   { icon: Lightbulb,    label: "Feature Requests", desc: "Have an idea? We are always listening.", color: "#00CFFF", action: () => setActiveForm("feature") },
                   { icon: MessageSquare, label: "General Feedback", desc: "Tell us what you love or what to improve.", color: "#A855F7", action: () => setActiveForm("feedback") },
-                  { icon: Mail,         label: "Email Support",    desc: "support@finmentor.ai — we reply within 24hrs.", color: "#FF6B35", action: () => {} },
+                  { icon: Mail,         label: "Email Support",    desc: "support@budget2broker.com — we reply within 24hrs.", color: "#FF6B35", action: () => {} },
                 ].map((c, i) => (
                   <motion.button key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
                     onClick={c.action}

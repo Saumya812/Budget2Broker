@@ -47,7 +47,7 @@ export default function ChartCard({ symbol = "AAPL" }: { symbol?: string }) {
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
           <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} width={60} tickFormatter={v => `$${v}`} />
-          <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}`, "Price"]} />
+          <Tooltip formatter={(v: number | undefined) => [`$${(v ?? 0).toFixed(2)}`, "Price"]} />
           <Line type="monotone" dataKey="close" stroke="#4F46E5" strokeWidth={2} dot={false} />
         </LineChart>
       </ResponsiveContainer>

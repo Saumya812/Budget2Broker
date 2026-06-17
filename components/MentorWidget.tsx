@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { useAuthFetch } from "@/lib/use-auth-fetch";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MessageCircle, X, Bot, Send, User,
@@ -17,26 +19,31 @@ const QUICK = [
   { icon: Zap,        label: "Cut expenses",         text: "Top 3 ways to reduce my monthly expenses?",        color: "#FFD600" },
 ];
 
-function getBudgetContext(): string {
-  try {
-    const raw = localStorage.getItem("budgetData");
-    if (!raw) return "No budget data yet.";
-    const expenses: { name: string; amount: number; type: "income" | "expense"; category: string }[] = JSON.parse(raw);
-    if (!expenses.length) return "No budget entries yet.";
-    const totalIncome  = expenses.filter(e => e.type === "income").reduce((s, e) => s + e.amount, 0);
-    const totalExpense = expenses.filter(e => e.type === "expense").reduce((s, e) => s + e.amount, 0);
-    return `Income: $${totalIncome.toFixed(2)}, Expenses: $${totalExpense.toFixed(2)}, Remaining: $${(totalIncome - totalExpense).toFixed(2)}`;
-  } catch { return "Could not read budget data."; }
-}
-
 export default function MentorWidget() {
-  const [open, setOpen]         = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput]       = useState("");
-  const [loading, setLoading]   = useState(false);
-  const [pulse, setPulse]       = useState(false);
-  const bottomRef               = useRef<HTMLDivElement>(null);
-  const inputRef                = useRef<HTMLInputElement>(null);
+  const { isLoaded, userId } = useAuth();
+  const authFetch = useAuthFetch();
+  const [open, setOpen]                   = useState(false);
+  const [messages, setMessages]           = useState<Message[]>([]);
+  const [input, setInput]                 = useState("");
+  const [loading, setLoading]             = useState(false);
+  const [pulse, setPulse]                 = useState(false);
+  const [budgetContext, setBudgetContext] = useState("No budget data yet.");
+  const bottomRef                         = useRef<HTMLDivElement>(null);
+  const inputRef                          = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isLoaded || !userId) return;
+    authFetch("/api/budget")
+      .then(r => r.json())
+      .then(data => {
+        const expenses: { amount: number; type: string }[] = data.expenses ?? [];
+        if (!expenses.length) return;
+        const totalIncome  = expenses.filter(e => e.type === "income").reduce((s, e) => s + e.amount, 0);
+        const totalExpense = expenses.filter(e => e.type === "expense").reduce((s, e) => s + e.amount, 0);
+        setBudgetContext(`Income: $${totalIncome.toFixed(2)}, Expenses: $${totalExpense.toFixed(2)}, Remaining: $${(totalIncome - totalExpense).toFixed(2)}`);
+      })
+      .catch(() => {});
+  }, [isLoaded, userId, authFetch]);
 
   /* Pulse the button after 3 seconds to draw attention */
   useEffect(() => {
@@ -67,7 +74,7 @@ export default function MentorWidget() {
       const res = await fetch("/api/finbot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: updated, budgetContext: getBudgetContext() }),
+        body: JSON.stringify({ messages: updated, budgetContext }),
       });
       if (!res.ok) throw new Error();
       const data  = await res.json();
@@ -78,7 +85,7 @@ export default function MentorWidget() {
     } finally {
       setLoading(false);
     }
-  }, [input, messages, loading]);
+  }, [input, messages, loading, budgetContext]);
 
   const isEmpty = messages.length === 0;
 

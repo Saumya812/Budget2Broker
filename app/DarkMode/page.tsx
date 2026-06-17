@@ -75,7 +75,7 @@ export default function DarkModePage() {
   };
 
   const THEMES: { id: Theme; icon: React.ElementType; label: string; desc: string }[] = [
-    { id: "dark",   icon: Moon,    label: "Dark Mode",  desc: "Easy on the eyes. The FinMentor default." },
+    { id: "dark",   icon: Moon,    label: "Dark Mode",  desc: "Easy on the eyes. The Budget2Broker default." },
     { id: "light",  icon: Sun,     label: "Light Mode", desc: "Clean and bright for daytime use." },
     { id: "system", icon: Monitor, label: "System",     desc: "Follows your device theme setting." },
   ];

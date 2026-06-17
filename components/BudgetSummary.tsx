@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { useAuthFetch } from "@/lib/use-auth-fetch";
 import { motion, AnimatePresence } from "framer-motion";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import {
@@ -10,9 +12,9 @@ import {
 } from "lucide-react";
 
 type Expense = {
-  id: number; name: string; category: string;
+  id: string; name: string; category: string;
   amount: number; type: "income" | "expense";
-  date: string; time: string;
+  date: string; time: string; created_at: string;
 };
 
 const CATEGORIES = ["Food", "Transport", "Entertainment", "Education", "Shopping", "Health", "Rent", "Utilities", "Others"];
@@ -107,8 +109,9 @@ const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent
 };
 
 export default function BudgetSummary() {
+  const { isLoaded, userId } = useAuth();
+  const authFetch = useAuthFetch();
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loaded, setLoaded]     = useState(false);
   const [name, setName]         = useState("");
   const [category, setCategory] = useState("Food");
   const [amount, setAmount]     = useState("");
@@ -118,40 +121,51 @@ export default function BudgetSummary() {
   const [addOpen, setAddOpen]   = useState(false);
   const listRef                 = useRef<HTMLDivElement>(null);
 
-  // Load from localStorage FIRST
   useEffect(() => {
-    try {
-      const s = localStorage.getItem("budgetData");
-      if (s) setExpenses(JSON.parse(s));
-    } catch {}
-    setLoaded(true);
-  }, []);
+    if (!isLoaded || !userId) return;
+    authFetch("/api/budget")
+      .then(r => r.json())
+      .then(data => {
+        if (!data.expenses) return;
+        setExpenses(data.expenses.map((e: {
+          id: string; name: string; category: string;
+          amount: number; type: "income" | "expense"; created_at: string;
+        }) => {
+          const d = new Date(e.created_at);
+          return {
+            ...e,
+            date: d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+            time: d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+          };
+        }));
+      })
+      .catch(() => {});
+  }, [isLoaded, userId, authFetch]);
 
-  // Only save AFTER initial load is complete
-  useEffect(() => {
-    if (loaded) {
-      localStorage.setItem("budgetData", JSON.stringify(expenses));
-    }
-  }, [expenses, loaded]);
-
-  const addExpense = () => {
+  const addExpense = async () => {
     if (!name.trim() || !amount) return;
-    const now = new Date();
-    setExpenses(p => [...p, {
-      id: Date.now(),
-      name: name.trim(),
-      category,
-      amount: parseFloat(amount),
-      type,
-      date: now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      time: now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-    }]);
+    const res  = await authFetch("/api/budget", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim(), amount, type, category }),
+    });
+    const data = await res.json();
+    if (!data.expense) return;
+    const d = new Date(data.expense.created_at);
+    setExpenses(p => [{
+      ...data.expense,
+      date: d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      time: d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+    }, ...p]);
     setName(""); setAmount("");
     setAddOpen(false);
     setTimeout(() => listRef.current?.scrollTo({ top: 0, behavior: "smooth" }), 100);
   };
 
-  const deleteExpense = (id: number) => setExpenses(p => p.filter(e => e.id !== id));
+  const deleteExpense = async (id: string) => {
+    await authFetch(`/api/budget/${id}`, { method: "DELETE" });
+    setExpenses(p => p.filter(e => e.id !== id));
+  };
 
   const totalIncome  = expenses.filter(e => e.type === "income").reduce((s, e) => s + e.amount, 0);
   const totalExpense = expenses.filter(e => e.type === "expense").reduce((s, e) => s + e.amount, 0);
@@ -168,7 +182,7 @@ export default function BudgetSummary() {
 
   const filtered = (filter === "all" ? expenses : expenses.filter(e => e.type === filter))
     .slice()
-    .sort((a, b) => sortBy === "amount" ? b.amount - a.amount : b.id - a.id);
+    .sort((a, b) => sortBy === "amount" ? b.amount - a.amount : new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   return (
     <div style={{ background: "var(--bg)", minHeight: "100vh", position: "relative" }}>

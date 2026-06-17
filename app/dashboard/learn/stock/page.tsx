@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { useAuthFetch } from "@/lib/use-auth-fetch";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, ReferenceLine,
@@ -24,17 +26,6 @@ const fmtTime = (t: string) => {
 
 const STARTING_CASH = 10_000;
 
-function loadWatchlist(): WatchlistItem[] {
-  try { return JSON.parse(localStorage.getItem("watchlist") ?? "[]"); } catch { return []; }
-}
-function saveWatchlist(w: WatchlistItem[]) { localStorage.setItem("watchlist", JSON.stringify(w)); }
-function loadPortfolio(): Portfolio {
-  try {
-    const p = JSON.parse(localStorage.getItem("portfolio") ?? "null");
-    return p ?? { cash: STARTING_CASH, holdings: [] };
-  } catch { return { cash: STARTING_CASH, holdings: [] }; }
-}
-function savePortfolio(p: Portfolio) { localStorage.setItem("portfolio", JSON.stringify(p)); }
 
 /* ── Grid background ── */
 function GridBg() {
@@ -212,6 +203,8 @@ function TradeModal({ symbol, price, portfolio, onClose, onTrade }: {
 
 /* ── Main Page ── */
 export default function StockPage() {
+  const { isLoaded, userId } = useAuth();
+  const authFetch = useAuthFetch();
   const [symbol, setSymbol]           = useState("AAPL");
   const [selectedDays, setSelectedDays] = useState<"7" | "90">("90");
   const [watchlist, setWatchlist]     = useState<WatchlistItem[]>([]);
@@ -228,9 +221,18 @@ export default function StockPage() {
   const { results, loading: sLoad, search, clearResults } = useStockSearch();
 
   useEffect(() => {
-    setWatchlist(loadWatchlist());
-    setPortfolio(loadPortfolio());
-  }, []);
+    if (!isLoaded || !userId) return;
+    authFetch("/api/watchlist")
+      .then(r => r.json())
+      .then(data => {
+        if (data.watchlist) setWatchlist(data.watchlist.map((w: { symbol: string; added_at: string; last_price?: number }) => ({ symbol: w.symbol, addedAt: w.added_at, lastPrice: w.last_price })));
+      })
+      .catch(() => {});
+    authFetch("/api/portfolio")
+      .then(r => r.json())
+      .then(data => { if (data.portfolio) setPortfolio(data.portfolio); })
+      .catch(() => {});
+  }, [isLoaded, userId, authFetch]);
 
   useEffect(() => {
     const t = setTimeout(() => { if (searchQ) search(searchQ); else clearResults(); }, 400);
@@ -244,30 +246,33 @@ export default function StockPage() {
 
   const isWatched   = watchlist.some(w => w.symbol === symbol);
   const toggleWatch = () => {
-    const next = isWatched
-      ? watchlist.filter(w => w.symbol !== symbol)
-      : [...watchlist, { symbol, addedAt: new Date().toISOString(), lastPrice: quote?.price }];
-    setWatchlist(next); saveWatchlist(next);
-    showToast(isWatched ? `Removed ${symbol} from watchlist` : `Added ${symbol} to watchlist`);
+    if (isWatched) {
+      setWatchlist(prev => prev.filter(w => w.symbol !== symbol));
+      authFetch(`/api/watchlist/${symbol}`, { method: "DELETE" }).catch(() => {});
+      showToast(`Removed ${symbol} from watchlist`);
+    } else {
+      setWatchlist(prev => [...prev, { symbol, addedAt: new Date().toISOString(), lastPrice: quote?.price }]);
+      authFetch("/api/watchlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ symbol, last_price: quote?.price }) }).catch(() => {});
+      showToast(`Added ${symbol} to watchlist`);
+    }
   };
 
   const handleTrade = (type: "buy" | "sell", shares: number) => {
     if (!quote) return;
     const cost = shares * quote.price;
-    setPortfolio(prev => {
-      let next: Portfolio;
-      if (type === "buy") {
-        const existing = prev.holdings.find(h => h.symbol === symbol);
-        const holdings = existing
-          ? prev.holdings.map(h => h.symbol === symbol ? { ...h, shares: h.shares + shares, avgPrice: (h.avgPrice * h.shares + cost) / (h.shares + shares) } : h)
-          : [...prev.holdings, { symbol, shares, avgPrice: quote.price, boughtAt: new Date().toISOString() }];
-        next = { cash: prev.cash - cost, holdings };
-      } else {
-        const holdings = prev.holdings.map(h => h.symbol === symbol ? { ...h, shares: h.shares - shares } : h).filter(h => h.shares > 0);
-        next = { cash: prev.cash + cost, holdings };
-      }
-      savePortfolio(next); return next;
-    });
+    let next: Portfolio;
+    if (type === "buy") {
+      const existing = portfolio.holdings.find(h => h.symbol === symbol);
+      const holdings = existing
+        ? portfolio.holdings.map(h => h.symbol === symbol ? { ...h, shares: h.shares + shares, avgPrice: (h.avgPrice * h.shares + cost) / (h.shares + shares) } : h)
+        : [...portfolio.holdings, { symbol, shares, avgPrice: quote.price, boughtAt: new Date().toISOString() }];
+      next = { cash: portfolio.cash - cost, holdings };
+    } else {
+      const holdings = portfolio.holdings.map(h => h.symbol === symbol ? { ...h, shares: h.shares - shares } : h).filter(h => h.shares > 0);
+      next = { cash: portfolio.cash + cost, holdings };
+    }
+    setPortfolio(next);
+    authFetch("/api/portfolio", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cash: next.cash, holdings: next.holdings }) }).catch(() => {});
     showToast(`${type === "buy" ? "Bought" : "Sold"} ${shares} share${shares !== 1 ? "s" : ""} of ${symbol}`);
   };
 
@@ -544,7 +549,7 @@ export default function StockPage() {
                       <button onClick={() => setSymbol(w.symbol)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--mono)", fontSize: 13, fontWeight: 700, color: "var(--em)", padding: 0 }}>{w.symbol}</button>
                       <p style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--text3)", marginTop: 1 }}>{new Date(w.addedAt).toLocaleDateString()}</p>
                     </div>
-                    <button onClick={() => { const next = watchlist.filter(x => x.symbol !== w.symbol); setWatchlist(next); saveWatchlist(next); }}
+                    <button onClick={() => { setWatchlist(prev => prev.filter(x => x.symbol !== w.symbol)); authFetch(`/api/watchlist/${w.symbol}`, { method: "DELETE" }).catch(() => {}); }}
                       style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text3)", transition: "color 0.15s", padding: 4 }}
                       onMouseEnter={e => (e.currentTarget.style.color = "var(--red)")}
                       onMouseLeave={e => (e.currentTarget.style.color = "var(--text3)")}

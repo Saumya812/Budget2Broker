@@ -157,23 +157,44 @@ export default function AImentorPage() {
   const sendMessage = useCallback(async (text?: string) => {
     const content = (text ?? input).trim();
     if (!content || loading) return;
+
     const userMsg: Message = { role: "user", content, id: Date.now() };
     const updated = [...messages, userMsg];
     setMessages(updated);
     setInput("");
     setLoading(true);
+
+    // Add empty assistant message — we'll stream tokens into it
+    const assistantId = Date.now() + 1;
+    setMessages(prev => [...prev, { role: "assistant", content: "", id: assistantId }]);
+
     try {
       const res = await fetch("/api/finbot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: updated, budgetContext }),
       });
-      if (!res.ok) throw new Error();
-      const data  = await res.json();
-      const reply = data.content?.[0]?.text ?? "Sorry, I could not get a response. Please try again.";
-      setMessages(prev => [...prev, { role: "assistant", content: reply, id: Date.now() }]);
+      if (!res.ok || !res.body) throw new Error();
+
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last?.role !== "assistant") return prev;
+          return [...prev.slice(0, -1), { ...last, content: last.content + chunk }];
+        });
+      }
     } catch {
-      setMessages(prev => [...prev, { role: "assistant", content: "Could not reach the AI mentor. Please check your API setup.", id: Date.now() }]);
+      setMessages(prev => {
+        const last = prev[prev.length - 1];
+        if (last?.role !== "assistant") return prev;
+        return [...prev.slice(0, -1), { ...last, content: "Could not reach the AI mentor. Please check your API setup." }];
+      });
     } finally {
       setLoading(false);
     }
@@ -283,7 +304,7 @@ export default function AImentorPage() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               {messages.map(msg => <MessageBubble key={msg.id} msg={msg} onCopy={handleCopy} />)}
-              {loading && <TypingIndicator />}
+              {loading && messages[messages.length - 1]?.content === "" && <TypingIndicator />}
               <div ref={bottomRef} />
             </div>
           )}

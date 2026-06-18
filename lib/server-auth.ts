@@ -1,6 +1,6 @@
-import { auth } from "@clerk/nextjs/server";
+import { headers } from "next/headers";
 
 export async function getAuthUserId(): Promise<string | null> {
-  const { userId } = await auth();
-  return userId ?? null;
+  const h = await headers();
+  return h.get("x-user-id") ?? null;
 }

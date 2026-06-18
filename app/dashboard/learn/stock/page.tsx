@@ -72,7 +72,7 @@ function AIExplainModal({ symbol, points, quote, onClose }: {
       const prompt = `You are FinMentor AI. Explain the following stock chart data to a beginner investor in simple, friendly language. Keep it under 150 words. Use plain text, no markdown.\n\nStock: ${symbol}\nCurrent price: $${quote?.price ?? last}\nToday's change: ${quote?.changePct ?? "N/A"}\nChart trend: ${trend} over the shown period\nPrice swing: ${swing}%\nHighest price shown: $${fmt(maxP)}\nLowest price shown: $${fmt(minP)}\n\nExplain what this chart tells us, whether this looks positive or concerning, and one simple takeaway for a beginner.`;
 
       try {
-        const res  = await fetch("/api/finbot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: [{ role: "user", content: prompt }], budgetContext: "User is viewing a stock chart." }) });
+        const res  = await fetch("/api/finbot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: [{ role: "user", content: prompt }], budgetContext: "User is viewing a stock chart.", noStream: true }) });
         const data = await res.json();
         setExplanation(data.content?.[0]?.text ?? "Could not generate explanation.");
       } catch {

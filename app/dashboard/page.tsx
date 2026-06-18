@@ -321,7 +321,7 @@ export default function DashboardPage() {
   const authFetch = useAuthFetch();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [hideBalance, setHideBalance] = useState(false);
-  const [time, setTime] = useState(new Date());
+  const [time, setTime] = useState<Date | null>(null);
 
   useEffect(() => {
     if (!isLoaded || !userId) return;
@@ -332,6 +332,7 @@ export default function DashboardPage() {
   }, [isLoaded, userId, authFetch]);
 
   useEffect(() => {
+    setTime(new Date());
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
@@ -377,7 +378,7 @@ export default function DashboardPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
               <LiveDot />
               <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text3)", letterSpacing: "1px" }}>
-                {time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                {time?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) ?? ""}
               </span>
             </div>
             <h1 style={{ fontSize: 36, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1 }}>

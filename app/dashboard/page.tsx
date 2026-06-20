@@ -1,11 +1,12 @@
 "use client";
 
 import InvestmentPlan from "@/components/InvestmentPlan";
-import { useEffect, useState, useRef } from "react";
+import OnboardingModal from "@/components/OnboardingModal";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useAuthFetch } from "@/lib/use-auth-fetch";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   PieChart, Pie, Cell, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -322,14 +323,59 @@ export default function DashboardPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [hideBalance, setHideBalance] = useState(false);
   const [time, setTime] = useState<Date | null>(null);
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [insightLoading, setInsightLoading] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const insightFetched = useRef(false);
+
+  const fetchInsight = useCallback(async (budgetContext: string) => {
+    setInsightLoading(true);
+    try {
+      const res = await fetch("/api/finbot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "Give me a concise spending analysis (2-3 sentences) and one specific actionable tip based on my budget data." }],
+          budgetContext,
+          noStream: true,
+        }),
+      });
+      const data = await res.json();
+      const text = data?.content?.[0]?.text ?? null;
+      if (text) setAiInsight(text);
+    } catch {
+      // silently fail — keep any existing insight
+    } finally {
+      setInsightLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isLoaded || !userId) return;
     authFetch("/api/budget")
       .then(r => r.json())
-      .then(data => { if (data.expenses) setExpenses(data.expenses); })
-      .catch(() => {});
-  }, [isLoaded, userId, authFetch]);
+      .then(data => {
+        setDataLoaded(true);
+        if (data.expenses) {
+          setExpenses(data.expenses);
+          const expArr: Expense[] = data.expenses;
+          if (expArr.length > 0 && !insightFetched.current) {
+            insightFetched.current = true;
+            const totalIncome  = expArr.filter(e => e.type === "income").reduce((s, e) => s + e.amount, 0);
+            const totalExpense = expArr.filter(e => e.type === "expense").reduce((s, e) => s + e.amount, 0);
+            const remaining    = totalIncome - totalExpense;
+            const byCategory: Record<string, number> = {};
+            expArr.filter(e => e.type === "expense").forEach(e => {
+              byCategory[e.category] = (byCategory[e.category] || 0) + e.amount;
+            });
+            const breakdown = Object.entries(byCategory).map(([cat, amt]) => `  - ${cat}: $${amt.toFixed(2)}`).join("\n");
+            const ctx = `User budget summary:\n- Total income: $${totalIncome.toFixed(2)}\n- Total expenses: $${totalExpense.toFixed(2)}\n- Remaining: $${remaining.toFixed(2)}\n- Expense breakdown:\n${breakdown || "  (none)"}`;
+            fetchInsight(ctx);
+          }
+        }
+      })
+      .catch(() => { setDataLoaded(true); });
+  }, [isLoaded, userId, authFetch, fetchInsight]);
 
   useEffect(() => {
     setTime(new Date());
@@ -574,48 +620,100 @@ export default function DashboardPage() {
           </div>
         </motion.div>
 
-        {/* ── AI tip ── */}
+        {/* ── AI Spending Analysis ── */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.9 }}
           style={{ marginTop: 24 }}
         >
-          <MagCard style={{
+          <div style={{
             background: "var(--surface)",
-            border: "1px solid var(--border)",
+            border: "1px solid rgba(168,85,247,0.25)",
             borderRadius: "var(--radius-lg)",
             padding: "20px 24px",
-            display: "flex", alignItems: "flex-start", gap: 16,
             boxShadow: "0 0 40px rgba(168,85,247,0.05)",
+            position: "relative",
+            overflow: "hidden",
           }}>
-            <div style={{
-              width: 40, height: 40, flexShrink: 0,
-              background: "rgba(168,85,247,0.1)",
-              border: "1px solid rgba(168,85,247,0.25)",
-              borderRadius: 10,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <Bot size={17} color="#A855F7" />
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "linear-gradient(90deg, transparent, rgba(168,85,247,0.6), transparent)" }} />
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 16, flex: 1 }}>
+                <div style={{
+                  width: 40, height: 40, flexShrink: 0,
+                  background: "rgba(168,85,247,0.1)",
+                  border: "1px solid rgba(168,85,247,0.25)",
+                  borderRadius: 10,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: insightLoading ? "0 0 20px rgba(168,85,247,0.4)" : "none",
+                  transition: "box-shadow 0.3s",
+                }}>
+                  <Bot size={17} color="#A855F7" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontFamily: "var(--mono)", fontSize: 10, color: "#A855F7", fontWeight: 700, letterSpacing: "1.5px", marginBottom: 8 }}>// AI SPENDING ANALYSIS</p>
+                  {insightLoading ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        {[0, 1, 2].map(i => (
+                          <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#A855F7", animation: "bounce 1.2s ease-in-out infinite", animationDelay: `${i * 0.2}s`, opacity: 0.7 }} />
+                        ))}
+                      </div>
+                      <span style={{ fontSize: 12, color: "var(--text3)", fontFamily: "var(--mono)" }}>Analyzing your finances...</span>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: 14, color: "var(--text)", lineHeight: 1.7 }}>
+                      {aiInsight ?? (totalIncome === 0
+                        ? "Add your income and expenses to get a personalized AI spending analysis."
+                        : "Loading your spending analysis..."
+                      )}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {totalIncome > 0 && (
+                <button
+                  onClick={() => {
+                    const byCategory: Record<string, number> = {};
+                    expenses.filter(e => e.type === "expense").forEach(e => {
+                      byCategory[e.category] = (byCategory[e.category] || 0) + e.amount;
+                    });
+                    const breakdown = Object.entries(byCategory).map(([cat, amt]) => `  - ${cat}: $${amt.toFixed(2)}`).join("\n");
+                    const ctx = `User budget summary:\n- Total income: $${totalIncome.toFixed(2)}\n- Total expenses: $${totalExpense.toFixed(2)}\n- Remaining: $${remaining.toFixed(2)}\n- Expense breakdown:\n${breakdown || "  (none)"}`;
+                    fetchInsight(ctx);
+                  }}
+                  disabled={insightLoading}
+                  style={{
+                    flexShrink: 0,
+                    display: "flex", alignItems: "center", gap: 5,
+                    background: "rgba(168,85,247,0.08)",
+                    border: "1px solid rgba(168,85,247,0.25)",
+                    borderRadius: "var(--radius)",
+                    padding: "6px 12px",
+                    color: "#A855F7", fontSize: 11, fontWeight: 600,
+                    cursor: insightLoading ? "not-allowed" : "pointer",
+                    opacity: insightLoading ? 0.5 : 1,
+                    transition: "all 0.2s",
+                    fontFamily: "var(--mono)",
+                  }}
+                >
+                  <Zap size={11} />
+                  Refresh
+                </button>
+              )}
             </div>
-            <div>
-              <p style={{ fontFamily: "var(--mono)", fontSize: 10, color: "#A855F7", fontWeight: 700, letterSpacing: "1.5px", marginBottom: 6 }}>// AI INSIGHT</p>
-              <p style={{ fontSize: 14, color: "var(--text)", lineHeight: 1.7 }}>
-                {totalIncome === 0
-                  ? "Add your income and expenses to get personalized AI insights about your spending habits."
-                  : savingsRate >= 20
-                  ? `You're saving ${savingsRate}% of your income — excellent discipline. Consider investing your surplus in index funds for long-term growth.`
-                  : `You're spending ${spendPct}% of your income. Try the 50/30/20 rule: 50% needs, 30% wants, 20% savings.`
-                }
-              </p>
-            </div>
-          </MagCard>
+          </div>
         </motion.div>
 
       </div>
 
+      {dataLoaded && expenses.length === 0 && userId && (
+        <OnboardingModal userId={userId} />
+      )}
+
       <style>{`
         @keyframes pulse-em { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-6px); } }
         @media (max-width: 640px) {
           .fm-grid-3 { grid-template-columns: 1fr !important; }
           .fm-analytics-grid { grid-template-columns: 1fr !important; }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { stockLimiter, getIdentifier } from "@/lib/ratelimit";
 
 const BASE = "https://www.alphavantage.co/query";
 
@@ -18,6 +19,11 @@ async function cachedFetch(url: string): Promise<unknown> {
 }
 
 export async function GET(req: NextRequest) {
+  const { success } = await stockLimiter.limit(getIdentifier(req));
+  if (!success) {
+    return NextResponse.json({ error: "Too many requests. Please wait a moment." }, { status: 429 });
+  }
+
   const AV_KEY = process.env.ALPHA_VANTAGE_KEY ?? "demo";
 
   const { searchParams } = new URL(req.url);

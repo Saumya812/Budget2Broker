@@ -2,11 +2,17 @@ import { streamText } from "ai";
 import { createGroq } from "@ai-sdk/groq";
 import { NextRequest, NextResponse } from "next/server";
 import { searchKnowledge } from "@/lib/rag";
+import { aiLimiter, getIdentifier } from "@/lib/ratelimit";
 
 const groq = createGroq({ apiKey: process.env.GROQ_API_KEY });
 
 export async function POST(req: NextRequest) {
   try {
+    const { success } = await aiLimiter.limit(getIdentifier(req));
+    if (!success) {
+      return NextResponse.json({ error: "Too many requests. Please wait a moment." }, { status: 429 });
+    }
+
     const { messages, budgetContext, noStream } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {

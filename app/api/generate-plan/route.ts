@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { aiLimiter, getIdentifier } from "@/lib/ratelimit";
 
 export async function POST(req: NextRequest) {
   try {
+    const { success } = await aiLimiter.limit(getIdentifier(req));
+    if (!success) {
+      return NextResponse.json({ error: "Too many requests. Please wait a moment." }, { status: 429 });
+    }
+
     const { budgetData } = await req.json();
 
     const expenses = budgetData ?? [];

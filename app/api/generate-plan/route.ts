@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { aiLimiter, getIdentifier } from "@/lib/ratelimit";
+import { getRiskProfile, getTimeHorizon, buildAllocations, calculateProjections } from "@/lib/portfolio-engine";
+import { getScreenedETFs, getEtfName } from "@/lib/fmp";
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,85 +11,121 @@ export async function POST(req: NextRequest) {
     }
 
     const { budgetData } = await req.json();
+    const expenses: { type: string; amount: number; name?: string; category?: string }[] = budgetData ?? [];
 
-    const expenses = budgetData ?? [];
-    const totalIncome  = expenses.filter((e: {type:string;amount:number}) => e.type === "income").reduce((s: number, e: {amount:number}) => s + e.amount, 0);
-    const totalExpense = expenses.filter((e: {type:string;amount:number}) => e.type === "expense").reduce((s: number, e: {amount:number}) => s + e.amount, 0);
+    const totalIncome  = expenses.filter(e => e.type === "income") .reduce((s, e) => s + e.amount, 0);
+    const totalExpense = expenses.filter(e => e.type === "expense").reduce((s, e) => s + e.amount, 0);
     const investable   = Math.max(0, totalIncome - totalExpense);
+    const monthlyInvestment = investable > 0 ? Math.round(investable * 0.8) : 100;
 
-    const systemPrompt = `You are Budget2Broker's AI investment advisor. You analyze a user's budget and generate a precise, personalized investment plan.
+    // ── 1. Algorithm: risk profile + time horizon ─────────────────────────────
+    const riskProfile = getRiskProfile(totalIncome, totalExpense, investable);
+    const timeHorizon = getTimeHorizon(riskProfile);
 
-You MUST respond ONLY with a valid JSON object — no markdown, no explanation, no preamble, no backticks. Just raw JSON.
+    // ── 2. FMP: screen live ETFs for this risk profile ────────────────────────
+    const screenedETFs = await getScreenedETFs(riskProfile, 4);
 
-The JSON must follow this exact structure:
+    // Enrich with proper names
+    const namedETFs = screenedETFs.map(etf => ({
+      ...etf,
+      name: getEtfName(etf.symbol),
+    }));
+
+    // ── 3. Build allocations + real projections ───────────────────────────────
+    const allocations = buildAllocations(namedETFs, monthlyInvestment);
+    const projections = calculateProjections(monthlyInvestment, allocations);
+
+    // ── 4. Groq: explanation text only ────────────────────────────────────────
+    const expenseList = expenses
+      .filter(e => e.type === "expense")
+      .map(e => `${e.category ?? "general"}: $${e.amount}`)
+      .join(", ");
+
+    const systemPrompt = `You are Budget2Broker's AI financial writer. You receive a fully computed investment plan and write short, friendly explanations in plain English. You do NOT choose tickers, percentages, or numbers — those are already determined by our algorithm. Respond ONLY with valid JSON, no markdown, no backticks.
+
+Required format:
 {
-  "summary": "2-sentence personalized summary of the plan",
-  "monthlyInvestment": <number: how much to invest monthly>,
-  "riskProfile": "Conservative" | "Moderate" | "Aggressive",
-  "timeHorizon": "Short-term (1-2 years)" | "Medium-term (3-5 years)" | "Long-term (5+ years)",
-  "allocations": [
-    {
-      "symbol": "TICKER",
-      "name": "Full Company/Fund Name",
-      "type": "Stock" | "ETF" | "Bond" | "Real Estate",
-      "percentage": <number 0-100>,
-      "monthlyAmount": <number>,
-      "reason": "One sentence why this fits the user",
-      "color": "#hexcolor"
-    }
-  ],
-  "projections": {
-    "oneYear": <number>,
-    "threeYear": <number>,
-    "fiveYear": <number>
+  "summary": "2 sentences personalizing this plan to the user's specific income/expense situation",
+  "reasons": {
+    "<SYMBOL>": "1 sentence explaining why this ETF fits this user's risk profile and goals"
   },
   "tips": ["tip1", "tip2", "tip3"]
-}
+}`;
 
-Rules:
-- All allocations must sum to exactly 100%
-- monthlyAmount for each must sum to monthlyInvestment
-- If investable amount is $0, suggest starting with $50/month
-- Pick 4-6 allocations appropriate for the risk profile
-- Use real ticker symbols (SPY, QQQ, AAPL, BND, VNQ, etc.)
-- projections assume average annual returns based on risk profile
-- Return ONLY the JSON, nothing else`;
+    const userMessage = `User financial snapshot:
+- Monthly income: $${totalIncome.toFixed(2)}
+- Monthly expenses: $${totalExpense.toFixed(2)}
+- Available to invest: $${investable.toFixed(2)}/month
+- We are investing: $${monthlyInvestment}/month
+- Expense categories: ${expenseList || "no data yet"}
+- Risk profile: ${riskProfile}
+- Time horizon: ${timeHorizon}
+- Portfolio: ${allocations.map(a => `${a.symbol} ${a.name} (${a.percentage}%, $${a.monthlyAmount}/mo, 5yr CAGR: ${(a.cagr * 100).toFixed(1)}%)`).join(" | ")}
 
-    const userMessage = `Here is the user's financial data:
-- Monthly Income: $${totalIncome.toFixed(2)}
-- Monthly Expenses: $${totalExpense.toFixed(2)}
-- Available to Invest: $${investable.toFixed(2)}/month
-- Expense breakdown: ${JSON.stringify(expenses.filter((e:{type:string}) => e.type === "expense").map((e:{name:string;amount:number;category:string}) => ({ name: e.name, amount: e.amount, category: e.category })))}
+Write the summary, a 1-sentence reason per ticker, and 3 practical tips tailored to this user.`;
 
-Generate a personalized investment plan for this user.`;
+    let summary = `Based on your ${riskProfile.toLowerCase()} risk profile, we've built a diversified portfolio investing $${monthlyInvestment}/month across ${allocations.length} live-screened ETFs.`;
+    let reasons: Record<string, string> = {};
+    let tips: string[] = [
+      "Invest consistently every month regardless of market conditions.",
+      "Reinvest any dividends to accelerate compound growth.",
+      "Review your allocation once a year and rebalance if needed.",
+    ];
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+    try {
+      const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model:      "llama-3.3-70b-versatile",
+          max_tokens: 512,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user",   content: userMessage  },
+          ],
+        }),
+      });
+
+      if (groqRes.ok) {
+        const groqData = await groqRes.json() as { choices: { message: { content: string } }[] };
+        const raw      = groqData.choices?.[0]?.message?.content ?? "{}";
+        const parsed   = JSON.parse(raw.replace(/```json|```/g, "").trim());
+        if (parsed.summary)                              summary = parsed.summary;
+        if (parsed.reasons)                              reasons = parsed.reasons;
+        if (Array.isArray(parsed.tips) && parsed.tips.length) tips = parsed.tips;
+      }
+    } catch { /* fall through to defaults */ }
+
+    // ── 5. Assemble final plan ────────────────────────────────────────────────
+    const plan = {
+      summary,
+      monthlyInvestment,
+      riskProfile,
+      timeHorizon,
+      allocations: allocations.map(a => ({
+        symbol:         a.symbol,
+        name:           a.name,
+        type:           a.type,
+        percentage:     a.percentage,
+        monthlyAmount:  a.monthlyAmount,
+        livePrice:      a.livePrice,
+        expenseRatio:   a.expenseRatio,
+        sharesPerMonth: a.sharesPerMonth,
+        cagr:           a.cagr,
+        reason:         reasons[a.symbol] ?? `${a.name} provides ${a.type.toLowerCase()} exposure suited to a ${riskProfile.toLowerCase()} investor.`,
+        color:          a.color,
+      })),
+      projections,
+      tips,
+      meta: {
+        generatedAt:  new Date().toISOString(),
+        dataSource:   "Financial Modeling Prep (live)",
+        riskProfile,
       },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        max_tokens: 1024,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      console.error("Groq API error:", err);
-      return NextResponse.json({ error: "Failed to generate plan" }, { status: 500 });
-    }
-
-    const data = await response.json();
-    const raw  = data.choices?.[0]?.message?.content ?? "{}";
-
-    const cleaned = raw.replace(/```json|```/g, "").trim();
-    const plan    = JSON.parse(cleaned);
+    };
 
     return NextResponse.json({ plan });
   } catch (err) {

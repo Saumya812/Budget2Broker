@@ -22,13 +22,39 @@ export async function POST(req: NextRequest) {
     const riskProfile = getRiskProfile(totalIncome, totalExpense, investable);
     const timeHorizon = getTimeHorizon(riskProfile);
 
-    // ── 2. FMP: screen live ETFs for this risk profile ────────────────────────
-    const screenedETFs = await getScreenedETFs(riskProfile, 4);
+    // ── 2. FMP: screen live ETFs — fall back to hardcoded if FMP fails ──────────
+    const FALLBACK_ETFS: Record<string, { symbol: string; name: string; type: "ETF"|"Bond"|"Commodity"|"Real Estate"; color: string; cagr5yr: number; price: number; expenseRatio: number; aum: number }[]> = {
+      Conservative: [
+        { symbol: "BND",  name: "Vanguard Total Bond Market ETF",       type: "Bond",      color: "#00CFFF", cagr5yr: 0.015, price: 72,  expenseRatio: 0.03, aum: 100e9 },
+        { symbol: "VTI",  name: "Vanguard Total Stock Market ETF",      type: "ETF",       color: "#00FF88", cagr5yr: 0.12,  price: 280, expenseRatio: 0.03, aum: 400e9 },
+        { symbol: "VTIP", name: "Vanguard Short-Term Inflation-Prot ETF", type: "Bond",    color: "#A855F7", cagr5yr: 0.022, price: 47,  expenseRatio: 0.04, aum: 20e9  },
+        { symbol: "GLD",  name: "SPDR Gold Shares",                     type: "Commodity", color: "#FFD600", cagr5yr: 0.07,  price: 220, expenseRatio: 0.40, aum: 60e9  },
+      ],
+      Moderate: [
+        { symbol: "VTI",  name: "Vanguard Total Stock Market ETF",      type: "ETF",         color: "#00FF88", cagr5yr: 0.12, price: 280, expenseRatio: 0.03, aum: 400e9 },
+        { symbol: "QQQ",  name: "Invesco QQQ Trust (NASDAQ-100)",       type: "ETF",         color: "#00CFFF", cagr5yr: 0.17, price: 480, expenseRatio: 0.20, aum: 250e9 },
+        { symbol: "BND",  name: "Vanguard Total Bond Market ETF",       type: "Bond",        color: "#A855F7", cagr5yr: 0.015,price: 72,  expenseRatio: 0.03, aum: 100e9 },
+        { symbol: "VNQ",  name: "Vanguard Real Estate ETF",             type: "Real Estate", color: "#FF6B35", cagr5yr: 0.08, price: 85,  expenseRatio: 0.12, aum: 30e9  },
+      ],
+      Aggressive: [
+        { symbol: "QQQ",  name: "Invesco QQQ Trust (NASDAQ-100)",      type: "ETF", color: "#00FF88", cagr5yr: 0.17, price: 480, expenseRatio: 0.20, aum: 250e9 },
+        { symbol: "VGT",  name: "Vanguard Information Technology ETF", type: "ETF", color: "#00CFFF", cagr5yr: 0.20, price: 580, expenseRatio: 0.10, aum: 70e9  },
+        { symbol: "VTI",  name: "Vanguard Total Stock Market ETF",     type: "ETF", color: "#A855F7", cagr5yr: 0.12, price: 280, expenseRatio: 0.03, aum: 400e9 },
+        { symbol: "VXUS", name: "Vanguard Total International Stock ETF", type: "ETF", color: "#FF6B35", cagr5yr: 0.07, price: 60, expenseRatio: 0.07, aum: 80e9 },
+      ],
+    };
 
-    // Enrich with proper names
+    let screenedETFs;
+    try {
+      screenedETFs = await getScreenedETFs(riskProfile, 4);
+      if (!screenedETFs.length) throw new Error("No ETFs returned");
+    } catch {
+      screenedETFs = FALLBACK_ETFS[riskProfile];
+    }
+
     const namedETFs = screenedETFs.map(etf => ({
       ...etf,
-      name: getEtfName(etf.symbol),
+      name: getEtfName(etf.symbol) || etf.name,
     }));
 
     // ── 3. Build allocations + real projections ───────────────────────────────

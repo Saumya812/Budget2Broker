@@ -23,8 +23,10 @@
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.562.0",
     "next": "^16.2.1",
+    "plaid": "^42.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-plaid-link": "^4.1.1",
     "recharts": "^3.6.0"
   },
   "devDependencies": {

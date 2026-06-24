@@ -10,6 +10,7 @@ import {
   Wallet, Zap, Activity, ChevronUp, ChevronDown,
   Sparkles, Filter, Clock,
 } from "lucide-react";
+import PlaidConnect from "./PlaidConnect";
 
 type Expense = {
   id: string; name: string; category: string;
@@ -200,7 +201,17 @@ export default function BudgetSummary() {
             </h1>
             <p style={{ color: "var(--text2)", fontSize: 13, marginTop: 6 }}>{expenses.length} transactions tracked</p>
           </div>
-          <button onClick={() => setAddOpen(o => !o)} style={{
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <PlaidConnect onSyncComplete={() => {
+              authFetch("/api/budget").then(r => r.json()).then(data => {
+                if (!data.expenses) return;
+                setExpenses(data.expenses.map((e: { id: string; name: string; category: string; amount: number; type: "income" | "expense"; created_at: string; }) => {
+                  const d = new Date(e.created_at);
+                  return { ...e, date: d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), time: d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) };
+                }));
+              }).catch(() => {});
+            }} />
+            <button onClick={() => setAddOpen(o => !o)} style={{
             display: "flex", alignItems: "center", gap: 8,
             background: addOpen ? "var(--em)" : "var(--em3)",
             border: "1px solid var(--em2)", borderRadius: "var(--radius)",
@@ -212,6 +223,7 @@ export default function BudgetSummary() {
             <Plus size={15} strokeWidth={2.5} />
             {addOpen ? "Cancel" : "Add Transaction"}
           </button>
+          </div>
         </motion.div>
 
         {/* Add panel */}

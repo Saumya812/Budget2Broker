@@ -2,6 +2,7 @@
 
 import InvestmentPlan from "@/components/InvestmentPlan";
 import OnboardingModal from "@/components/OnboardingModal";
+import FinancialHealthScore from "@/components/FinancialHealthScore";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useAuthFetch } from "@/lib/use-auth-fetch";
@@ -506,11 +507,20 @@ export default function DashboardPage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35 }}
-          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}
+          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}
           className="fm-analytics-grid"
         >
           <CategoryChart data={catData} />
           <MonthlyChart  data={monthlyData} />
+        </motion.div>
+
+        {/* ── Financial Health Score ── */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} style={{ marginBottom: 24 }}>
+          <FinancialHealthScore
+            totalIncome={totalIncome}
+            totalExpense={totalExpense}
+            savings={remaining}
+          />
         </motion.div>
 
         {/* ── Quick actions ── */}

@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
         amount:        Math.abs(tx.amount),
         // Plaid: positive = money out (expense), negative = money in (income)
         type:          tx.amount > 0 ? "expense" : "income",
-        category:      mapCategory(tx.category),
+        category:      mapCategory(tx.category ?? null),
         date:          tx.date,
         plaid_tx_id:   tx.transaction_id,
       }));

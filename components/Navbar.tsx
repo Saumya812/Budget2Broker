@@ -9,11 +9,11 @@ import { Show, UserButton } from "@clerk/nextjs";
 const LINKS = [
   { href: "/dashboard",           label: "Dashboard" },
   { href: "/dashboard/budget",    label: "Budget" },
+  { href: "/dashboard/goals",     label: "Goals" },
   { href: "/dashboard/learn",     label: "Investments" },
   { href: "/Educational_Modules", label: "Learn" },
-  { href: "/calendar",            label: "Calendar" },
   { href: "/dashboard/AIMentor",  label: "Chat" },
-  { href: "/ReportProblem",       label: "Support" },
+  { href: "/dashboard/profile",   label: "Profile" },
   { href: "/DarkMode",            label: "Theme" },
 ];
 

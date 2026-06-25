@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { usePlaidLink } from "react-plaid-link";
+import type { PlaidLinkOnSuccess } from "react-plaid-link";
 import { useAuthFetch } from "@/lib/use-auth-fetch";
 import { Building2, RefreshCw, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
@@ -47,7 +48,7 @@ export default function PlaidConnect({ onSyncComplete }: PlaidConnectProps) {
   }, [authFetch]);
 
   // Plaid Link callbacks
-  const onSuccess = useCallback(async (publicToken: string, metadata: { institution?: { name?: string } }) => {
+  const onSuccess = useCallback<PlaidLinkOnSuccess>(async (publicToken, metadata) => {
     try {
       await authFetch("/api/plaid/exchange-token", {
         method:  "POST",

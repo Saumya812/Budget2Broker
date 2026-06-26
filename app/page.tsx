@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowRight, TrendingUp, Shield, Zap, BookOpen, BarChart2, Bot, ChevronRight } from "lucide-react";
+import { ArrowRight, TrendingUp, Shield, Zap, BookOpen, BarChart2, Bot, ChevronRight, Target, Building2 } from "lucide-react";
 
 /* ── Particle canvas ── */
 function ParticleField() {
@@ -212,12 +212,12 @@ function MagneticBtn({ children, href, className, style }: {
 
 /* ── Glowing feature card ── */
 const features = [
-  { icon: BarChart2, label: "Live Stock Tracker",  desc: "Real-time prices, AI chart explanations, $10K simulated portfolio.", color: "#00FF88", href: "/dashboard/learn/stock" },
-  { icon: Shield,    label: "Smart Budgeting",     desc: "Track every dollar. Visual breakdowns. Zero jargon.", color: "#00CFFF", href: "/dashboard/budget" },
-  { icon: Bot,       label: "AI Mentor 24/7",      desc: "Your personal financial advisor reads your budget and gives real advice.", color: "#A855F7", href: "/dashboard/AIMentor" },
-  { icon: BookOpen,  label: "14 Free Lessons",     desc: "Stocks, bonds, ETFs, real estate. Learn with quizzes.", color: "#FF6B35", href: "/Educational_Modules" },
-  { icon: TrendingUp,label: "Invest Simulator",    desc: "Practice with real market data before risking a single real dollar.", color: "#00FF88", href: "/dashboard/learn/stock" },
-  { icon: Zap,       label: "AI Chart Explain",    desc: "Click any chart. Claude explains it in plain English instantly.", color: "#FFD600", href: "/dashboard/learn/stock" },
+  { icon: Shield,    label: "Smart Budgeting",     desc: "Track every dollar. Connect your bank. Visual breakdowns. Zero jargon.",           color: "#00CFFF", href: "/dashboard/budget" },
+  { icon: Target,    label: "Goal Tracker",        desc: "Set savings goals with deadlines, progress bars, and a live completion score.",      color: "#00FF88", href: "/dashboard/goals" },
+  { icon: Bot,       label: "AI Mentor 24/7",      desc: "Your personal financial advisor reads your budget and gives real personalized advice.", color: "#A855F7", href: "/dashboard/AIMentor" },
+  { icon: BarChart2, label: "Live ETF Screener",   desc: "Algorithm picks top ETFs by AUM, expense ratio, and 5-year CAGR for your risk profile.", color: "#FF6B35", href: "/dashboard/learn" },
+  { icon: BookOpen,  label: "14 Free Lessons",     desc: "Stocks, bonds, ETFs, real estate. Bite-sized lessons with quizzes.",               color: "#FFD600", href: "/Educational_Modules" },
+  { icon: Building2, label: "Bank Sync",           desc: "Connect your real bank via Plaid. 90 days of transactions imported automatically.", color: "#00CFFF", href: "/dashboard/budget" },
 ];
 
 function FeatureCard({ f, i }: { f: typeof features[0]; i: number }) {
@@ -408,7 +408,7 @@ export default function LandingPage() {
         </p>
 
         {/* CTA buttons */}
-        <div style={{
+        <div className="fm-hero-cta" style={{
           display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap",
           marginBottom: 80,
           animation: "fadeUp 0.6s ease 0.3s both",
@@ -422,7 +422,7 @@ export default function LandingPage() {
         </div>
 
         {/* Stats bar */}
-        <div style={{
+        <div className="fm-stats-bar" style={{
           display: "inline-grid",
           gridTemplateColumns: "repeat(4, 1fr)",
           background: "var(--surface)",
@@ -473,10 +473,10 @@ export default function LandingPage() {
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
           {[
-            { n: "01", title: "Track budget",     desc: "Add income and expenses. See your real spending patterns.", color: "#00FF88" },
-            { n: "02", title: "Learn basics",      desc: "Bite-sized lessons on stocks, bonds, ETFs, real estate.", color: "#00CFFF" },
-            { n: "03", title: "Practice investing",desc: "Trade real stocks with $10K virtual cash. Zero risk.", color: "#A855F7" },
-            { n: "04", title: "Ask AI mentor",     desc: "Personalized advice based on your actual budget.", color: "#FF6B35" },
+            { n: "01", title: "Track your budget",  desc: "Add income and expenses — or connect your bank and import 90 days instantly.", color: "#00FF88" },
+            { n: "02", title: "Set goals",          desc: "Create savings goals with targets, deadlines, and real-time progress tracking.", color: "#00CFFF" },
+            { n: "03", title: "Get your plan",      desc: "Our algorithm picks live ETFs matched to your risk profile and savings rate.", color: "#A855F7" },
+            { n: "04", title: "Ask the AI mentor",  desc: "Personalized financial advice based on your real budget — not generic tips.", color: "#FF6B35" },
           ].map((s, i) => {
             const [hov, setHov] = useState(false);
             return (

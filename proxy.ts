@@ -9,6 +9,7 @@ const isProtected = createRouteMatcher([
   "/api/plaid(.*)",
   "/api/goals(.*)",
   "/api/profile(.*)",
+  "/api/seed-demo",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

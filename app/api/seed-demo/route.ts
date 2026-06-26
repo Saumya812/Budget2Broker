@@ -38,9 +38,9 @@ export async function POST() {
   await supabaseAdmin.from("expenses").delete().eq("clerk_user_id", userId);
   await supabaseAdmin.from("goals").delete().eq("clerk_user_id", userId);
 
-  // Seed expenses
+  // Seed expenses — only send columns that exist in the table
   const { error: expErr } = await supabaseAdmin.from("expenses").insert(
-    DEMO_EXPENSES.map(e => ({ ...e, clerk_user_id: userId, time: "12:00" }))
+    DEMO_EXPENSES.map(({ name, category, type, amount }) => ({ clerk_user_id: userId, name, category, type, amount }))
   );
   if (expErr) return NextResponse.json({ error: expErr.message }, { status: 500 });
 

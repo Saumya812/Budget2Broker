@@ -11,6 +11,7 @@ import {
   Sparkles, Filter, Clock,
 } from "lucide-react";
 import PlaidConnect from "./PlaidConnect";
+import DemoToggle from "./DemoToggle";
 
 type Expense = {
   id: string; name: string; category: string;
@@ -120,11 +121,11 @@ export default function BudgetSummary() {
   const [filter, setFilter]     = useState<"all" | "income" | "expense">("all");
   const [sortBy, setSortBy]     = useState<"date" | "amount">("date");
   const [addOpen, setAddOpen]   = useState(false);
-  const [seeding, setSeeding]   = useState(false);
+  const [isDemo, setIsDemo]     = useState(false);
   const listRef                 = useRef<HTMLDivElement>(null);
 
-  const refreshExpenses = () =>
-    authFetch("/api/budget")
+  const refreshExpenses = (demo: boolean) =>
+    authFetch(`/api/budget${demo ? "?demo=true" : ""}`)
       .then(r => r.json())
       .then(data => {
         if (!data.expenses) return;
@@ -144,9 +145,9 @@ export default function BudgetSummary() {
 
   useEffect(() => {
     if (!isLoaded || !userId) return;
-    refreshExpenses();
+    refreshExpenses(isDemo);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, userId]);
+  }, [isLoaded, userId, isDemo]);
 
   const addExpense = async () => {
     if (!name.trim() || !amount) return;
@@ -207,32 +208,11 @@ export default function BudgetSummary() {
             <p style={{ color: "var(--text2)", fontSize: 13, marginTop: 6 }}>{expenses.length} transactions tracked</p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <PlaidConnect onSyncComplete={() => refreshExpenses()} />
-            <button
-              onClick={async () => {
-                if (!confirm("This will replace all your current data with sample demo data. Continue?")) return;
-                setSeeding(true);
-                try {
-                  await authFetch("/api/seed-demo", { method: "POST" });
-                  await refreshExpenses();
-                } finally { setSeeding(false); }
-              }}
-              disabled={seeding}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "10px 16px", borderRadius: "var(--radius)",
-                border: "1px solid var(--border2)", background: "var(--surface2)",
-                color: "var(--text3)", fontSize: 12, fontWeight: 600,
-                cursor: seeding ? "not-allowed" : "pointer",
-                fontFamily: "'Space Grotesk', sans-serif", transition: "all 0.2s",
-                opacity: seeding ? 0.6 : 1,
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = "#A855F7"; e.currentTarget.style.color = "#A855F7"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border2)"; e.currentTarget.style.color = "var(--text3)"; }}
-            >
-              <Sparkles size={13} />
-              {seeding ? "Loading..." : "Demo Data"}
-            </button>
+            <PlaidConnect onSyncComplete={() => refreshExpenses(false)} />
+            <DemoToggle
+              isDemo={isDemo}
+              onToggle={(nowDemo) => { setIsDemo(nowDemo); refreshExpenses(nowDemo); }}
+            />
             <button onClick={() => setAddOpen(o => !o)} style={{
             display: "flex", alignItems: "center", gap: 8,
             background: addOpen ? "var(--em)" : "var(--em3)",

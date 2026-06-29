@@ -2,14 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getAuthUserId } from "@/lib/server-auth";
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   const userId = await getAuthUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const demo = new URL(req.url).searchParams.get("demo") === "true";
 
   const { data, error } = await supabaseAdmin
     .from("expenses")
     .select("*")
     .eq("clerk_user_id", userId)
+    .eq("is_demo", demo)
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

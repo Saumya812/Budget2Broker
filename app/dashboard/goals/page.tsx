@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useAuthFetch } from "@/lib/use-auth-fetch";
 import { motion, AnimatePresence } from "framer-motion";
 import { Target, Plus, Trash2, CheckCircle2, X, Calendar, DollarSign, TrendingUp, Zap } from "lucide-react";
+import DemoToggle from "@/components/DemoToggle";
 
 type Goal = {
   id: string;
@@ -54,11 +55,19 @@ export default function GoalsPage() {
   const [category, setCategory]         = useState("savings");
   const [color, setColor]               = useState("#00FF88");
   const [saving, setSaving]             = useState(false);
+  const [isDemo, setIsDemo]             = useState(false);
+
+  const refreshGoals = (demo: boolean) =>
+    authFetch(`/api/goals${demo ? "?demo=true" : ""}`)
+      .then(r => r.json())
+      .then(d => { if (d.goals) setGoals(d.goals); })
+      .catch(() => {});
 
   useEffect(() => {
     if (!isLoaded || !userId) return;
-    authFetch("/api/goals").then(r => r.json()).then(d => { if (d.goals) setGoals(d.goals); });
-  }, [isLoaded, userId, authFetch]);
+    refreshGoals(isDemo);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, userId, isDemo]);
 
   const resetForm = () => { setTitle(""); setTargetAmount(""); setCurrentAmount(""); setDeadline(""); setCategory("savings"); setColor("#00FF88"); setEditGoal(null); setShowAdd(false); };
 
@@ -116,12 +125,20 @@ export default function GoalsPage() {
             </h1>
             <p style={{ color: "var(--text2)", fontSize: 13, marginTop: 6 }}>{goals.length} goals · {completed} completed</p>
           </div>
-          <button onClick={() => { resetForm(); setShowAdd(true); }} style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--em3)", border: "1px solid var(--em2)", borderRadius: "var(--radius)", padding: "10px 20px", color: "var(--em)", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif", transition: "all 0.2s", boxShadow: "var(--em-glow-sm)" }}
-            onMouseEnter={e => { e.currentTarget.style.background = "var(--em)"; e.currentTarget.style.color = "#000"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "var(--em3)"; e.currentTarget.style.color = "var(--em)"; }}
-          >
-            <Plus size={15} /> Add Goal
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <DemoToggle
+              isDemo={isDemo}
+              onToggle={(nowDemo) => { setIsDemo(nowDemo); refreshGoals(nowDemo); }}
+            />
+            {!isDemo && (
+              <button onClick={() => { resetForm(); setShowAdd(true); }} style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--em3)", border: "1px solid var(--em2)", borderRadius: "var(--radius)", padding: "10px 20px", color: "var(--em)", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif", transition: "all 0.2s", boxShadow: "var(--em-glow-sm)" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "var(--em)"; e.currentTarget.style.color = "#000"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "var(--em3)"; e.currentTarget.style.color = "var(--em)"; }}
+              >
+                <Plus size={15} /> Add Goal
+              </button>
+            )}
+          </div>
         </motion.div>
 
         {/* Summary cards */}

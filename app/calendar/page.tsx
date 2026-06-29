@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { useAuthFetch } from "@/lib/use-auth-fetch";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft, ChevronRight, Plus, X, Bell,
@@ -31,11 +33,10 @@ function loadReminders(): Reminder[] {
   try { return JSON.parse(localStorage.getItem("calReminders") ?? "[]"); } catch { return []; }
 }
 function saveReminders(r: Reminder[]) { localStorage.setItem("calReminders", JSON.stringify(r)); }
-function loadExpenses(): Expense[] {
-  try { return JSON.parse(localStorage.getItem("budgetData") ?? "[]"); } catch { return []; }
-}
 
 export default function CalendarPage() {
+  const { isLoaded, userId } = useAuth();
+  const authFetch = useAuthFetch();
   const today = new Date();
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selected, setSelected] = useState<number | null>(today.getDate());
@@ -47,10 +48,24 @@ export default function CalendarPage() {
   const [newRepeat, setNewRepeat] = useState<"none" | "weekly" | "monthly">("none");
   const [hovDay, setHovDay] = useState<number | null>(null);
 
+  // Load reminders from localStorage, expenses from API
   useEffect(() => {
-    setExpenses(loadExpenses());
     setReminders(loadReminders());
   }, []);
+
+  useEffect(() => {
+    if (!isLoaded || !userId) return;
+    authFetch("/api/budget")
+      .then(r => r.json())
+      .then(data => {
+        if (!data.expenses) return;
+        setExpenses(data.expenses.map((e: { id: string; name: string; category: string; amount: number; type: "income" | "expense"; created_at: string }) => ({
+          ...e,
+          date: new Date(e.created_at).toISOString().split("T")[0],
+        })));
+      })
+      .catch(() => {});
+  }, [isLoaded, userId, authFetch]);
 
   const year  = viewDate.getFullYear();
   const month = viewDate.getMonth();
